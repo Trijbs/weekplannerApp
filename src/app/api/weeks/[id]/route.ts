@@ -1,6 +1,5 @@
 import { ok, parseError, fail } from "@/lib/api/http";
 import { ensureAuth } from "@/lib/api/guards";
-import { repairWeekConsistencyInBackground } from "@/lib/api/week-repair";
 import { db } from "@/lib/db/repository";
 
 export async function GET(
@@ -14,7 +13,6 @@ export async function GET(
     }
 
     const params = "then" in context.params ? await context.params : context.params;
-    repairWeekConsistencyInBackground(params.id);
     const aggregate = await db.getWeekAggregate(params.id);
     if (!aggregate) {
       return fail("Week niet gevonden.", 404);

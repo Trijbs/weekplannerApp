@@ -826,6 +826,28 @@ function weekdayDatesFromRange(startDate: string, endDate: string): Record<Weekd
   return computed;
 }
 
+function weekdayDatesForWeek(week: WeekRecord, hourBlocks: HourBlock[]): Record<Weekday, string> {
+  const range = normalizedWeekRange(week);
+  const computed = weekdayDatesFromRange(range.startDate, range.endDate);
+
+  for (const block of hourBlocks) {
+    if (!block.dayDate) {
+      continue;
+    }
+    if (weekdayFromIsoDate(block.dayDate) !== block.weekday) {
+      continue;
+    }
+    if (block.dayDate < range.startDate || block.dayDate > range.endDate) {
+      continue;
+    }
+    if (!computed[block.weekday]) {
+      computed[block.weekday] = block.dayDate;
+    }
+  }
+
+  return computed;
+}
+
 function ApiError({ message }: { message: string }) {
   return (
     <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1163,25 +1185,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       } satisfies Record<Weekday, string>;
     }
 
-    const range = normalizedWeekRange(payload.week);
-    const computed = weekdayDatesFromRange(range.startDate, range.endDate);
-
-    for (const block of payload.hourBlocks ?? []) {
-      if (!block.dayDate) {
-        continue;
-      }
-      if (weekdayFromIsoDate(block.dayDate) !== block.weekday) {
-        continue;
-      }
-      if (block.dayDate < range.startDate || block.dayDate > range.endDate) {
-        continue;
-      }
-      if (!computed[block.weekday]) {
-        computed[block.weekday] = block.dayDate;
-      }
-    }
-
-    return computed;
+    return weekdayDatesForWeek(payload.week, payload.hourBlocks ?? []);
   }, [payload?.hourBlocks, payload?.week]);
 
   const weekdayDateMap = useMemo(
@@ -1326,6 +1330,25 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
     return ordered;
   }, [orderedWeeksByDate, payload, weekSnapshots]);
+  const allTasks = useMemo(() => allWeekDetails.flatMap((detail) => detail.tasks), [allWeekDetails]);
+  const allHourBlocks = useMemo(() => allWeekDetails.flatMap((detail) => detail.hourBlocks), [allWeekDetails]);
+  const allHourEntries = useMemo(() => allWeekDetails.flatMap((detail) => detail.hourEntries), [allWeekDetails]);
+  const allHistory = useMemo(() => allWeekDetails.flatMap((detail) => detail.history), [allWeekDetails]);
+  const dayDateByWeekAndWeekday = useMemo(() => {
+    const dateMap = new Map<string, string>();
+
+    for (const detail of allWeekDetails) {
+      const weekdayMap = weekdayDatesForWeek(detail.week, detail.hourBlocks);
+      for (const weekday of WEEKDAYS) {
+        const dayDate = weekdayMap[weekday];
+        if (dayDate) {
+          dateMap.set(`${detail.week.id}:${weekday}`, dayDate);
+        }
+      }
+    }
+
+    return dateMap;
+  }, [allWeekDetails]);
   const plannerDaySummaries = useMemo(() => {
     const rows: Array<{
       key: string;
@@ -1345,22 +1368,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
     for (const detail of allWeekDetails) {
       const range = normalizedWeekRange(detail.week);
-      const weekdayMap = weekdayDatesFromRange(range.startDate, range.endDate);
-
-      for (const block of detail.hourBlocks) {
-        if (!block.dayDate) {
-          continue;
-        }
-        if (weekdayFromIsoDate(block.dayDate) !== block.weekday) {
-          continue;
-        }
-        if (block.dayDate < range.startDate || block.dayDate > range.endDate) {
-          continue;
-        }
-        if (!weekdayMap[block.weekday]) {
-          weekdayMap[block.weekday] = block.dayDate;
-        }
-      }
+      const weekdayMap = weekdayDatesForWeek(detail.week, detail.hourBlocks);
 
       for (const weekday of WEEKDAYS) {
         const dayDate = weekdayMap[weekday];
@@ -1546,7 +1554,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const groupedHourEntriesByDay = useMemo(() => {
     const dayMap = new Map<string, HourEntryDayGroup>();
 
-    for (const entry of payload?.hourEntries ?? []) {
+    for (const entry of allHourEntries) {
       const key = `${entry.dayDate}:${entry.weekday}`;
       const existing = dayMap.get(key);
       if (!existing) {
@@ -1577,7 +1585,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           ),
       }))
       .sort((a, b) => a.dayDate.localeCompare(b.dayDate));
-  }, [payload?.hourEntries]);
+  }, [allHourEntries]);
   const dayOverviewCardClass = "p-4 sm:p-5";
   const dayOverviewBodyClass = "mt-3 space-y-2";
   const hourSelectOptions = useMemo(
@@ -1749,12 +1757,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     [plannerPastDays],
   );
   const completedTaskLog = useMemo(() => {
-    if (!payload) {
+    if (!allTasks.length) {
       return [] as CompletedTaskLogItem[];
     }
 
     const doneAtByTaskId = new Map<string, string>();
-    for (const item of payload.history ?? []) {
+    for (const item of allHistory) {
       if (item.entityType !== "task") {
         continue;
       }
@@ -1771,7 +1779,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     }
 
     const projectSetByTaskKey = new Map<string, Set<string>>();
-    for (const block of payload.hourBlocks ?? []) {
+    for (const block of allHourBlocks) {
       const taskKey = normalizeTaskKey(block.taskText);
       if (!taskKey) {
         continue;
@@ -1782,29 +1790,31 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         continue;
       }
 
-      const currentSet = projectSetByTaskKey.get(taskKey) ?? new Set<string>();
+      const scopedTaskKey = `${block.weekId}:${block.weekday}:${taskKey}`;
+      const currentSet = projectSetByTaskKey.get(scopedTaskKey) ?? new Set<string>();
       currentSet.add(project);
-      projectSetByTaskKey.set(taskKey, currentSet);
+      projectSetByTaskKey.set(scopedTaskKey, currentSet);
     }
 
-    return payload.tasks
+    return allTasks
       .filter((task) => task.status === "klaar")
       .map((task) => {
         const taskKey = normalizeTaskKey(task.title);
-        const projects = taskKey ? Array.from(projectSetByTaskKey.get(taskKey) ?? []) : [];
+        const scopedTaskKey = `${task.weekId}:${task.weekday}:${taskKey}`;
+        const projects = taskKey ? Array.from(projectSetByTaskKey.get(scopedTaskKey) ?? []) : [];
         return {
           taskId: task.id,
           title: task.title,
           info: task.info,
           weekday: task.weekday,
-          dayDate: weekdayIsoMap[task.weekday] || null,
+          dayDate: dayDateByWeekAndWeekday.get(`${task.weekId}:${task.weekday}`) ?? null,
           projectText: projects.join(", "),
           deadlineAt: task.deadlineAt,
           checkedAt: doneAtByTaskId.get(task.id) ?? task.updatedAt,
         } satisfies CompletedTaskLogItem;
       })
       .sort((a, b) => b.checkedAt.localeCompare(a.checkedAt));
-  }, [payload, weekdayIsoMap]);
+  }, [allHistory, allHourBlocks, allTasks, dayDateByWeekAndWeekday]);
   const completedTaskLogProjects = useMemo(() => {
     const projects = new Set<string>();
     for (const item of completedTaskLog) {

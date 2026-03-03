@@ -19,21 +19,29 @@ function envRequired(name: string): string {
   return value;
 }
 
-function defaultAppOrigin(requestUrl?: string): string {
-  if (requestUrl) {
-    try {
-      return new URL(requestUrl).origin;
-    } catch {
-      // Fall through to configured/default origin.
-    }
-  }
-
+export function resolveAppOrigin(options?: { request?: Request; requestUrl?: string }): string {
   const envAppUrl = process.env.APP_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
   if (envAppUrl) {
     try {
       return new URL(envAppUrl).origin;
     } catch {
-      // Ignore invalid URL and fall through to localhost.
+      // Ignore invalid URL and fall through.
+    }
+  }
+
+  const request = options?.request;
+  const forwardedProto = request?.headers.get("x-forwarded-proto");
+  const forwardedHost = request?.headers.get("x-forwarded-host") ?? request?.headers.get("host");
+  if (forwardedHost) {
+    return `${forwardedProto || "https"}://${forwardedHost}`;
+  }
+
+  const requestUrl = options?.requestUrl;
+  if (requestUrl) {
+    try {
+      return new URL(requestUrl).origin;
+    } catch {
+      // Fall through to localhost.
     }
   }
 
@@ -45,7 +53,7 @@ export function resolveGoogleRedirectUri(requestUrl?: string): string {
   if (configured) {
     return configured;
   }
-  return `${defaultAppOrigin(requestUrl)}${GOOGLE_DRIVE_CALLBACK_PATH}`;
+  return `${resolveAppOrigin({ requestUrl })}${GOOGLE_DRIVE_CALLBACK_PATH}`;
 }
 
 function getOAuthConfig(requestUrl?: string, redirectUriOverride?: string) {

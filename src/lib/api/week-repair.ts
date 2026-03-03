@@ -7,6 +7,19 @@ import type { WeekRecord, Weekday } from "@/lib/db/types";
 const REPAIR_COOLDOWN_MS = 45_000;
 const lastRepairByWeek = new Map<string, number>();
 
+function repairErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function isTransientBackgroundRepairError(error: unknown): boolean {
+  const message = repairErrorMessage(error).toLowerCase();
+  return message.includes("error connecting to database") || message.includes("fetch failed");
+}
+
 function buildWeekKey(week: number, year: number): string {
   return `week-${year}-${String(week).padStart(2, "0")}`;
 }
@@ -214,6 +227,9 @@ export async function repairWeekConsistency(weekId: string): Promise<void> {
 
 export function repairWeekConsistencyInBackground(weekId: string): void {
   void repairWeekConsistency(weekId).catch((error) => {
+    if (isTransientBackgroundRepairError(error)) {
+      return;
+    }
     console.error("Week repair background error:", error);
   });
 }

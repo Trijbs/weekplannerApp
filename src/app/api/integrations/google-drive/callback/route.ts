@@ -1,19 +1,21 @@
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { exchangeCodeAndStoreConnection } from "@/lib/import/google-drive";
+import { exchangeCodeAndStoreConnection, resolveAppOrigin } from "@/lib/import/google-drive";
 
 const STATE_COOKIE = "drive_oauth_state";
 const REDIRECT_URI_COOKIE = "drive_oauth_redirect_uri";
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
+  const appOrigin = resolveAppOrigin({ request, requestUrl: request.url });
+  const redirectToApp = (path: string) => NextResponse.redirect(new URL(path, `${appOrigin}/`));
 
   try {
     const oauthError = request.nextUrl.searchParams.get("error");
     if (oauthError) {
       cookieStore.delete(STATE_COOKIE);
       cookieStore.delete(REDIRECT_URI_COOKIE);
-      return NextResponse.redirect(new URL(`/?drive=error_google_${encodeURIComponent(oauthError)}`, request.url));
+      return redirectToApp(`/?drive=error_google_${encodeURIComponent(oauthError)}`);
     }
 
     const code = request.nextUrl.searchParams.get("code");
@@ -23,16 +25,16 @@ export async function GET(request: NextRequest) {
     const redirectUriFromCookie = cookieStore.get(REDIRECT_URI_COOKIE)?.value;
 
     if (!code) {
-      return NextResponse.redirect(new URL("/?drive=error_code", request.url));
+      return redirectToApp("/?drive=error_code");
     }
 
     const expectedState = cookieStore.get(STATE_COOKIE)?.value;
     if (!expectedState || !state || expectedState !== state) {
-      return NextResponse.redirect(new URL("/?drive=error_state", request.url));
+      return redirectToApp("/?drive=error_state");
     }
 
     if (!folderId) {
-      return NextResponse.redirect(new URL("/?drive=error_folder", request.url));
+      return redirectToApp("/?drive=error_folder");
     }
 
     await exchangeCodeAndStoreConnection(code, folderId, {
@@ -42,10 +44,10 @@ export async function GET(request: NextRequest) {
     cookieStore.delete(STATE_COOKIE);
     cookieStore.delete(REDIRECT_URI_COOKIE);
 
-    return NextResponse.redirect(new URL("/?drive=connected", request.url));
+    return redirectToApp("/?drive=connected");
   } catch {
     cookieStore.delete(STATE_COOKIE);
     cookieStore.delete(REDIRECT_URI_COOKIE);
-    return NextResponse.redirect(new URL("/?drive=error", request.url));
+    return redirectToApp("/?drive=error");
   }
 }
