@@ -3078,7 +3078,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 </div>
               </div>
 
-              <div className="max-h-[420px] space-y-3 overflow-auto pr-1">
+              <div className="space-y-3">
                 {groupedHourEntriesByDay.length ? (
                   groupedHourEntriesByDay.map((group) => (
                     <section key={group.key} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
