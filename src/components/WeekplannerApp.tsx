@@ -2191,13 +2191,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         if (options?.localUpdate) {
           setInlineFeedback({ status: "saved", message: "Opgeslagen." });
         }
-        if (locallyUpdated) {
-          return { ok: true, queued: false, data: result.data };
-        }
-
         const serverWeekId = typeof result.data?.weekId === "string" ? result.data.weekId : null;
         const shouldKeepCurrentWeek = options?.keepCurrentWeek ?? false;
         const targetWeekId = shouldKeepCurrentWeek ? activeWeekId : serverWeekId ?? activeWeekId;
+        if (locallyUpdated) {
+          await loadData(targetWeekId ?? null);
+          return { ok: true, queued: false, data: result.data };
+        }
+
         await loadData(targetWeekId ?? null);
         return { ok: true, queued: false, data: result.data };
       } catch (mutationError) {
