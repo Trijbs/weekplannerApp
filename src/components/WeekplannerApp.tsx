@@ -14,6 +14,16 @@ import type {
 } from "@/lib/db/types";
 import { WEEKDAYS } from "@/lib/db/types";
 import { formatIsoToLocalInput } from "@/lib/db/helpers";
+import { DayDetailModal } from "@/components/weekplanner/DayDetailModal";
+import { PlannerHeader } from "@/components/weekplanner/PlannerHeader";
+import type {
+  CompletedTaskLogItem,
+  DetailTaskFormState,
+  HourBlockDisplayGroup,
+  HourEntryDayGroup,
+  PlannerDaySummary,
+  PlannerSearchResult,
+} from "@/components/weekplanner/types";
 import {
   flushMutationQueue,
   getQueuedCount,
@@ -21,71 +31,6 @@ import {
 } from "@/lib/client/offline-queue";
 
 type Tab = "planner" | "hours" | "blocks" | "past" | "log";
-
-type CompletedTaskLogItem = {
-  taskId: string;
-  weekId: string;
-  title: string;
-  info: string;
-  weekday: Weekday;
-  dayDate: string | null;
-  projectText: string;
-  deadlineAt: string | null;
-  checkedAt: string;
-};
-
-type PlannerDaySummary = {
-  key: string;
-  weekId: string;
-  weekLabel: string;
-  weekday: Weekday;
-  dayDate: string;
-  tasks: DayTask[];
-  hourBlocks: HourBlock[];
-  hourEntries: HourEntry[];
-  taskDone: number;
-  blockDone: number;
-  hoursTotal: number;
-  isToday: boolean;
-  isPast: boolean;
-};
-
-type PlannerSearchResult = {
-  key: string;
-  weekId: string;
-  weekLabel: string;
-  weekday: Weekday;
-  dayDate: string;
-  matchCount: number;
-  previews: string[];
-};
-
-type HourBlockDisplayGroup = {
-  key: string;
-  weekId: string;
-  weekday: Weekday;
-  dayDate: string | null;
-  label: string;
-  projectText: string;
-  taskLabels: string[];
-  timeStart: string;
-  timeEnd: string;
-  totalMinutes: number;
-  deadlineAt: string | null;
-  primaryStatus: HourBlock["status"];
-  hasMixedStatus: boolean;
-  blocks: HourBlock[];
-};
-
-type HourEntryDayGroup = {
-  key: string;
-  weekId: string;
-  weekLabel: string;
-  dayDate: string;
-  weekday: Weekday;
-  totalHours: number;
-  entries: HourEntry[];
-};
 
 type DashboardPayload = WeekAggregate & {
   hourSummary: HoursSummary;
@@ -919,12 +864,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     priority: "middel",
     status: "open",
   });
-  const [detailTaskForm, setDetailTaskForm] = useState({
+  const [detailTaskForm, setDetailTaskForm] = useState<DetailTaskFormState>({
     title: "",
     info: "",
     scheduleHint: "",
     deadlineAt: "",
-    priority: "middel" as "hoog" | "middel" | "laag",
+    priority: "middel",
   });
   const [detailTaskComposerExpanded, setDetailTaskComposerExpanded] = useState(false);
 
@@ -1567,6 +1512,21 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     activeWeekIndex >= 0 && activeWeekIndex < orderedWeeksByDate.length - 1
       ? orderedWeeksByDate[activeWeekIndex + 1]
       : null;
+  const headerWeekOptions = useMemo(
+    () =>
+      orderedWeeksByDate.map((week) => {
+        const weekRange = normalizedWeekRange(week);
+        return {
+          id: week.id,
+          label: week.weekLabel,
+          rangeText: `${weekRange.startDate} t/m ${weekRange.endDate}`,
+        };
+      }),
+    [orderedWeeksByDate],
+  );
+  const currentRangeText = payload?.week
+    ? `${activeRange?.startDate ?? payload.week.startDate} t/m ${activeRange?.endDate ?? payload.week.endDate}`
+    : "Weekgegevens laden...";
 
   useEffect(() => {
     if (!orderedWeekdays.length) {
@@ -2499,6 +2459,20 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     setDetailTaskComposerExpanded(false);
   }, [detailDay, detailDayIso, detailTaskForm, payload?.week?.id, selectedPlannerDayDetail?.dayDate, sendMutation]);
 
+  const patchDetailTask = useCallback(
+    (taskId: string, body: Record<string, unknown>, successMessage: string) =>
+      sendMutation(`/api/tasks/${taskId}`, "PATCH", body, successMessage, {
+        localUpdate: true,
+        silent: true,
+      }),
+    [sendMutation],
+  );
+
+  const deleteDetailTask = useCallback(
+    (taskId: string) => sendMutation(`/api/tasks/${taskId}`, "DELETE", {}, "Taak verwijderd."),
+    [sendMutation],
+  );
+
   const uploadExcel = async (file: File) => {
     setError(null);
 
@@ -2634,188 +2608,46 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-      <header className="rounded-3xl bg-[linear-gradient(135deg,#0f172a,#1d4ed8)] px-6 py-8 text-white shadow-2xl shadow-blue-900/30">
-        <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-blue-100">Weekplanner</p>
-            <h1 className="mt-1 text-3xl font-semibold">{payload?.week.weekLabel ?? "Week"}</h1>
-            <p className="mt-1 text-sm text-blue-100">
-              {activeRange?.startDate ?? payload?.week.startDate} t/m {activeRange?.endDate ?? payload?.week.endDate}
-            </p>
-            {orderedWeeksByDate.length ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => previousWeek && void loadData(previousWeek.id)}
-                  disabled={!previousWeek}
-                >
-                  Vorige
-                </button>
-                <select
-                  value={payload?.week.id}
-                  className="rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs text-white"
-                  onChange={(event) => void loadData(event.target.value)}
-                >
-                  {orderedWeeksByDate.map((week) => {
-                    const weekRange = normalizedWeekRange(week);
-                    return (
-                      <option key={week.id} value={week.id} className="text-slate-900">
-                        {week.weekLabel} ({weekRange.startDate} t/m {weekRange.endDate})
-                      </option>
-                    );
-                  })}
-                </select>
-                <button
-                  type="button"
-                  className="rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => nextWeek && void loadData(nextWeek.id)}
-                  disabled={!nextWeek}
-                >
-                  Volgende
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs"
-                  onClick={() => void loadData(null)}
-                >
-                  Naar huidige week
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <label className="cursor-pointer rounded-xl bg-white/10 px-3 py-2 text-sm backdrop-blur hover:bg-white/20">
-              Excel import
-              <input
-                type="file"
-                accept=".xlsx"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) {
-                    void uploadExcel(file);
-                  }
-                }}
-              />
-            </label>
-            <button type="button" className="rounded-xl bg-white/10 px-3 py-2 text-sm" onClick={runDriveSync}>
-              Sync Drive
-            </button>
-            <button type="button" className="rounded-xl bg-white/10 px-3 py-2 text-sm" onClick={connectDrive}>
-              Koppel Drive
-            </button>
-            {payload?.week.id ? (
-              <a
-                href={`/api/export/csv?weekId=${payload.week.id}`}
-                className="rounded-xl bg-amber-300 px-3 py-2 text-sm font-medium text-slate-900"
-              >
-                Export CSV
-              </a>
-            ) : null}
-            <button type="button" className="rounded-xl bg-white/10 px-3 py-2 text-sm" onClick={logout}>
-              Uitloggen
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2 text-xs text-blue-100">
-          <span className="rounded-full border border-white/30 px-2 py-1">
-            {isOnline ? "Online" : "Offline"}
-          </span>
-          <span className="rounded-full border border-white/30 px-2 py-1">
-            Wachtrij: {queueCount}
-          </span>
-          <span className="rounded-full border border-white/30 px-2 py-1">Tijdzone: Europe/Amsterdam</span>
-        </div>
-
-        <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Zoek Dag</p>
-            <p className="mt-1 text-sm text-blue-50">
-              Kies een datum en open direct het dagdetail om oude of aankomende informatie terug te vinden.
-            </p>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <input
-              type="date"
-              value={daySearchDate}
-              className="rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm text-white"
-              onChange={(event) => setDaySearchDate(event.target.value)}
-            />
-            <button
-              type="button"
-              className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900"
-              onClick={() => void goToPlannerDate(daySearchDate)}
-            >
-              Ga naar dag
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-3 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Zoek Project Of Taak</p>
-              <p className="mt-1 text-sm text-blue-50">
-                Zoek op projectnaam, taaknaam of reflectietekst en open direct de juiste dag.
-              </p>
-            </div>
-            <input
-              value={plannerSearchQuery}
-              className="w-full rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm text-white sm:max-w-md"
-              placeholder="Bijv. portfolio, reflectie, logo..."
-              onChange={(event) => setPlannerSearchQuery(event.target.value)}
-            />
-          </div>
-
-          {plannerSearchQuery.trim().length >= 2 ? (
-            <div className="mt-3 space-y-2">
-              {plannerSearchResults.length ? (
-                plannerSearchResults.map((result) => (
-                  <div
-                    key={result.key}
-                    className="rounded-xl border border-white/15 bg-slate-950/20 p-3 text-sm text-white"
-                  >
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="font-medium">
-                          {weekdayLabels[result.weekday]} ({formatDayDateLabel(result.dayDate)})
-                        </p>
-                        <p className="text-xs text-blue-100">
-                          {result.weekLabel} • {result.matchCount} match{result.matchCount === 1 ? "" : "es"}
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {result.previews.map((preview) => (
-                            <span
-                              key={`${result.key}-${preview}`}
-                              className="rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[11px] text-blue-50"
-                            >
-                              {preview}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900"
-                        onClick={() => void openPlannerDayDetailForWeek(result.weekId, result.weekday, result.dayDate)}
-                      >
-                        Open dag
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-xl border border-white/15 bg-slate-950/20 px-3 py-3 text-sm text-blue-50">
-                  Geen resultaten gevonden.
-                </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-      </header>
+      <PlannerHeader
+        currentWeekLabel={payload?.week.weekLabel ?? "Week"}
+        currentRangeText={currentRangeText}
+        weekOptions={headerWeekOptions}
+        currentWeekId={payload?.week.id ?? null}
+        hasPreviousWeek={Boolean(previousWeek)}
+        hasNextWeek={Boolean(nextWeek)}
+        exportHref={payload?.week.id ? `/api/export/csv?weekId=${payload.week.id}` : null}
+        queueCount={queueCount}
+        isOnline={isOnline}
+        daySearchDate={daySearchDate}
+        plannerSearchQuery={plannerSearchQuery}
+        plannerSearchResults={plannerSearchResults}
+        weekdayLabels={weekdayLabels}
+        formatDayDateLabel={formatDayDateLabel}
+        onPreviousWeek={() => previousWeek && void loadData(previousWeek.id)}
+        onWeekSelect={(weekId) => void loadData(weekId)}
+        onNextWeek={() => nextWeek && void loadData(nextWeek.id)}
+        onCurrentWeek={() => void loadData(null)}
+        onUploadExcel={(file) => {
+          void uploadExcel(file);
+        }}
+        onRunDriveSync={() => {
+          void runDriveSync();
+        }}
+        onConnectDrive={() => {
+          void connectDrive();
+        }}
+        onLogout={() => {
+          void logout();
+        }}
+        onDaySearchDateChange={setDaySearchDate}
+        onGoToDay={() => {
+          void goToPlannerDate(daySearchDate);
+        }}
+        onPlannerSearchQueryChange={setPlannerSearchQuery}
+        onOpenSearchResult={(result) => {
+          void openPlannerDayDetailForWeek(result.weekId, result.weekday, result.dayDate);
+        }}
+      />
 
       <nav className="mt-6 flex flex-wrap gap-2">
         <button
@@ -4100,323 +3932,38 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       </div>
 
       {selectedPlannerDayDetail ? (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/45 p-3 sm:p-6"
-          onClick={closePlannerDayDetail}
-        >
-          <div
-            className="mx-auto flex max-h-[calc(100vh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Dag detail</p>
-                <h2 className="text-xl font-semibold text-slate-900">
-                  {weekdayLabels[detailDay]}
-                  {detailDayIso ? (
-                    <span className="ml-2 text-base font-normal text-slate-500">
-                      ({formatDayDateLabel(detailDayIso)})
-                    </span>
-                  ) : null}
-                </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Taken {detailDoneCount}/{detailTasks.length} klaar • Uurblokken {detailHourBlocks.length} • Uren {detailHoursTotal}u
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {selectedPlannerDayDetail.weekLabel} • Live: {liveNowAmsterdam}
-                </p>
-              </div>
-              <button
-                type="button"
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                onClick={closePlannerDayDetail}
-              >
-                Sluiten
-              </button>
-            </div>
-
-            <div className="grid auto-rows-fr gap-4 overflow-auto p-4 sm:grid-cols-3 sm:p-6">
-              <section className="flex min-h-[24rem] flex-col rounded-xl border border-slate-200 p-3">
-                <h3 className="text-sm font-semibold text-slate-900">Taken</h3>
-                <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                      Snelle taak voor {weekdayLabels[detailDay]}
-                      {detailDayIso ? ` (${formatDayDateLabel(detailDayIso)})` : ""}
-                    </p>
-                    <button
-                      type="button"
-                      className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-white"
-                      onClick={() => setDetailTaskComposerExpanded((prev) => !prev)}
-                    >
-                      {detailTaskComposerExpanded ? "Minder opties" : "Meer opties"}
-                    </button>
-                  </div>
-
-                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1.7fr)_minmax(0,1.1fr)_minmax(0,1.15fr)_auto]">
-                    <input
-                      value={detailTaskForm.title}
-                      className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                      placeholder="Nieuwe taak"
-                      onChange={(event) => setDetailTaskForm((prev) => ({ ...prev, title: event.target.value }))}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void addDetailTask();
-                        }
-                      }}
-                    />
-                    <select
-                      value={detailTaskForm.scheduleHint}
-                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                      onChange={(event) => setDetailTaskForm((prev) => ({ ...prev, scheduleHint: event.target.value }))}
-                    >
-                      <option value="">Beste uren</option>
-                      {detailScheduleOptions.map((slot) => (
-                        <option key={`detail-slot-${slot}`} value={slot}>
-                          {slot}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="datetime-local"
-                      value={detailTaskForm.deadlineAt}
-                      className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                      onChange={(event) => setDetailTaskForm((prev) => ({ ...prev, deadlineAt: event.target.value }))}
-                    />
-                    <button
-                      type="button"
-                      className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={() => void addDetailTask()}
-                      disabled={!detailTaskForm.title.trim()}
-                    >
-                      Toevoegen
-                    </button>
-                  </div>
-
-                  {detailTaskComposerExpanded ? (
-                    <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(0,1fr)]">
-                      <input
-                        value={detailTaskForm.info}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        placeholder="Info of project"
-                        onChange={(event) => setDetailTaskForm((prev) => ({ ...prev, info: event.target.value }))}
-                      />
-                      <select
-                        value={detailTaskForm.priority}
-                        className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        onChange={(event) =>
-                          setDetailTaskForm((prev) => ({
-                            ...prev,
-                            priority: event.target.value as "hoog" | "middel" | "laag",
-                          }))
-                        }
-                      >
-                        <option value="hoog">Hoog</option>
-                        <option value="middel">Middel</option>
-                        <option value="laag">Laag</option>
-                      </select>
-                      <select
-                        value={detailTaskDeadlineTimeValue}
-                        className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                        onChange={(event) => applyDetailTaskDeadlineTime(event.target.value)}
-                      >
-                        <option value="">Sneltijd deadline</option>
-                        {TIME_OPTIONS.map((time) => (
-                          <option key={`detail-task-deadline-${time}`} value={time}>
-                            {time}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
-                  {detailTasks.length ? (
-                    detailTasks.map((task) => (
-                      <article
-                        key={task.id}
-                        className="rounded-lg border border-slate-100 bg-slate-50 p-2"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <label className="flex items-center gap-2 text-xs text-slate-700">
-                            <input
-                              type="checkbox"
-                              checked={task.status === "klaar"}
-                              onChange={(event) =>
-                                void sendMutation(
-                                  `/api/tasks/${task.id}`,
-                                  "PATCH",
-                                  {
-                                    status: event.target.checked ? "klaar" : "open",
-                                    expectedUpdatedAt: task.updatedAt,
-                                  },
-                                  "Taak status bijgewerkt.",
-                                  { localUpdate: true, silent: true },
-                                )
-                              }
-                              className="h-4 w-4"
-                            />
-                            Afvinken
-                          </label>
-                          <button
-                            type="button"
-                            className="text-xs text-red-600"
-                            onClick={() => void sendMutation(`/api/tasks/${task.id}`, "DELETE", {}, "Taak verwijderd.")}
-                          >
-                            Verwijder
-                          </button>
-                        </div>
-                        <div className="mt-2 space-y-2">
-                          <input
-                            key={`${task.id}-${task.updatedAt}-detail-title`}
-                            defaultValue={task.title}
-                            className={`w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm ${
-                              task.status === "klaar" ? "text-slate-400 line-through" : "text-slate-800"
-                            }`}
-                            onBlur={(event) =>
-                              void sendMutation(
-                                `/api/tasks/${task.id}`,
-                                "PATCH",
-                                { title: event.target.value, expectedUpdatedAt: task.updatedAt },
-                                "Taak bijgewerkt.",
-                                { localUpdate: true, silent: true },
-                              )
-                            }
-                          />
-                          <input
-                            key={`${task.id}-${task.updatedAt}-detail-info`}
-                            defaultValue={task.info}
-                            className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700"
-                            placeholder="Info"
-                            onBlur={(event) =>
-                              void sendMutation(
-                                `/api/tasks/${task.id}`,
-                                "PATCH",
-                                { info: event.target.value, expectedUpdatedAt: task.updatedAt },
-                                "Info bijgewerkt.",
-                                { localUpdate: true, silent: true },
-                              )
-                            }
-                          />
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            <select
-                              key={`${task.id}-${task.updatedAt}-detail-priority`}
-                              defaultValue={task.priority}
-                              className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                              onChange={(event) =>
-                                void sendMutation(
-                                  `/api/tasks/${task.id}`,
-                                  "PATCH",
-                                  { priority: event.target.value, expectedUpdatedAt: task.updatedAt },
-                                  "Prioriteit bijgewerkt.",
-                                  { localUpdate: true, silent: true },
-                                )
-                              }
-                            >
-                              <option value="hoog">Hoog</option>
-                              <option value="middel">Middel</option>
-                              <option value="laag">Laag</option>
-                            </select>
-                            <input
-                              key={`${task.id}-${task.updatedAt}-detail-deadline`}
-                              type="datetime-local"
-                              defaultValue={formatIsoToLocalInput(task.deadlineAt)}
-                              className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                              onBlur={(event) =>
-                                void sendMutation(
-                                  `/api/tasks/${task.id}`,
-                                  "PATCH",
-                                  {
-                                    deadlineAt: event.target.value
-                                      ? localInputToTimezoneIso(event.target.value, "Europe/Amsterdam")
-                                      : null,
-                                    expectedUpdatedAt: task.updatedAt,
-                                  },
-                                  "Deadline bijgewerkt.",
-                                  { localUpdate: true, silent: true },
-                                )
-                              }
-                            />
-                          </div>
-                        </div>
-                      </article>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">Geen taken voor deze dag.</p>
-                  )}
-                </div>
-              </section>
-
-              <section className="flex min-h-[24rem] flex-col rounded-xl border border-slate-200 p-3">
-                <h3 className="text-sm font-semibold text-slate-900">Uurblokken</h3>
-                {detailDayIsToday ? (
-                  <p className="mt-1 text-xs text-blue-700">Realtime: {liveNowAmsterdam}</p>
-                ) : null}
-                <div className="mt-2 flex-1 space-y-2 overflow-y-auto pr-1">
-                  {detailGroupedHourBlocks.length ? (
-                    detailGroupedHourBlocks.map((blockGroup) => (
-                      <article
-                        key={blockGroup.key}
-                        className={`rounded-lg border p-2.5 transition-colors ${
-                          detailDayIsToday &&
-                          blockGroup.blocks.some((block) =>
-                            isNowInsideBlock(block.timeStart, block.timeEnd, nowMinutesAmsterdam),
-                          )
-                            ? "border-blue-300 bg-blue-50 ring-2 ring-blue-200"
-                            : "border-slate-100 bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-slate-800">
-                            {blockGroup.label}
-                          </p>
-                          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-700">
-                            {blockGroup.timeStart} - {blockGroup.timeEnd}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-600">
-                          {formatHourAmount(blockGroup.totalMinutes / 60)} • {blockGroup.blocks.length} blok
-                          {blockGroup.blocks.length === 1 ? "" : "ken"}
-                          {blockGroup.taskLabels.length > 1 ? ` • ${blockGroup.taskLabels.join(", ")}` : ""}
-                        </p>
-                        {detailDayIsToday &&
-                        blockGroup.blocks.some((block) =>
-                          isNowInsideBlock(block.timeStart, block.timeEnd, nowMinutesAmsterdam),
-                        ) ? (
-                          <span className="mt-2 inline-flex rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-                            Nu actief
-                          </span>
-                        ) : null}
-                      </article>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">Geen uurblokken voor deze dag.</p>
-                  )}
-                </div>
-              </section>
-
-              <section className="flex min-h-[24rem] flex-col rounded-xl border border-slate-200 p-3">
-                <h3 className="text-sm font-semibold text-slate-900">Urenregistratie</h3>
-                <div className="mt-2 flex-1 space-y-2 overflow-y-auto pr-1">
-                  {detailHourEntries.length ? (
-                    detailHourEntries.map((entry) => (
-                      <article key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
-                        <p className="text-sm font-medium text-slate-800">{entry.hoursDecimal}u</p>
-                        <p className="text-sm text-slate-600">
-                          {entry.projectName || "Onbekend project"} • {entry.noteText || "Geen notitie"}
-                        </p>
-                      </article>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">Geen urenregistratie voor deze dag.</p>
-                  )}
-                </div>
-              </section>
-            </div>
-          </div>
-        </div>
+        <DayDetailModal
+          weekdayLabels={weekdayLabels}
+          detailDay={detailDay}
+          detailDayIso={detailDayIso}
+          detailDayLabel={detailDayIso ? formatDayDateLabel(detailDayIso) : null}
+          weekLabel={selectedPlannerDayDetail.weekLabel}
+          liveNowAmsterdam={liveNowAmsterdam}
+          detailDoneCount={detailDoneCount}
+          detailTasks={detailTasks}
+          detailHourBlocksCount={detailHourBlocks.length}
+          detailHoursTotal={detailHoursTotal}
+          detailTaskForm={detailTaskForm}
+          detailTaskComposerExpanded={detailTaskComposerExpanded}
+          detailScheduleOptions={detailScheduleOptions}
+          detailTaskDeadlineTimeValue={detailTaskDeadlineTimeValue}
+          detailGroupedHourBlocks={detailGroupedHourBlocks}
+          detailHourEntries={detailHourEntries}
+          detailDayIsToday={detailDayIsToday}
+          nowMinutesAmsterdam={nowMinutesAmsterdam}
+          timeOptions={TIME_OPTIONS}
+          formatHourAmount={formatHourAmount}
+          isNowInsideBlock={isNowInsideBlock}
+          formatDayDateLabel={formatDayDateLabel}
+          localInputToTimezoneIso={localInputToTimezoneIso}
+          onClose={closePlannerDayDetail}
+          onToggleComposer={() => setDetailTaskComposerExpanded((prev) => !prev)}
+          onDetailTaskFormChange={(patch) => setDetailTaskForm((prev) => ({ ...prev, ...patch }))}
+          onApplyDetailTaskDeadlineTime={applyDetailTaskDeadlineTime}
+          onAddTask={() => addDetailTask()}
+          onTaskPatch={patchDetailTask}
+          onTaskDelete={deleteDetailTask}
+        />
       ) : null}
     </div>
   );
