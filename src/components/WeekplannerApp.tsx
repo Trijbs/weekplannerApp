@@ -24,6 +24,7 @@ type Tab = "planner" | "hours" | "blocks" | "past" | "log";
 
 type CompletedTaskLogItem = {
   taskId: string;
+  weekId: string;
   title: string;
   info: string;
   weekday: Weekday;
@@ -31,6 +32,32 @@ type CompletedTaskLogItem = {
   projectText: string;
   deadlineAt: string | null;
   checkedAt: string;
+};
+
+type PlannerDaySummary = {
+  key: string;
+  weekId: string;
+  weekLabel: string;
+  weekday: Weekday;
+  dayDate: string;
+  tasks: DayTask[];
+  hourBlocks: HourBlock[];
+  hourEntries: HourEntry[];
+  taskDone: number;
+  blockDone: number;
+  hoursTotal: number;
+  isToday: boolean;
+  isPast: boolean;
+};
+
+type PlannerSearchResult = {
+  key: string;
+  weekId: string;
+  weekLabel: string;
+  weekday: Weekday;
+  dayDate: string;
+  matchCount: number;
+  previews: string[];
 };
 
 type HourBlockDisplayGroup = {
@@ -873,8 +900,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [todayIsoAmsterdam, setTodayIsoAmsterdam] = useState<string | null>(null);
   const [liveNowAmsterdam, setLiveNowAmsterdam] = useState("");
   const [todoDay, setTodoDay] = useState<Weekday>("maandag");
-  const [plannerDayDetail, setPlannerDayDetail] = useState<Weekday | null>(null);
+  const [plannerDayDetailRef, setPlannerDayDetailRef] = useState<{ weekId: string; dayDate: string } | null>(null);
   const [daySearchDate, setDaySearchDate] = useState("");
+  const [plannerSearchQuery, setPlannerSearchQuery] = useState("");
   const [logDateFilter, setLogDateFilter] = useState<"all" | "today" | "week">("all");
   const [logProjectFilter, setLogProjectFilter] = useState<string>("all");
   const [hiddenLogTaskIds, setHiddenLogTaskIds] = useState<string[]>([]);
@@ -1368,21 +1396,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     return dateMap;
   }, [allWeekDetails]);
   const plannerDaySummaries = useMemo(() => {
-    const rows: Array<{
-      key: string;
-      weekId: string;
-      weekLabel: string;
-      weekday: Weekday;
-      dayDate: string;
-      tasks: DayTask[];
-      hourBlocks: HourBlock[];
-      hourEntries: HourEntry[];
-      taskDone: number;
-      blockDone: number;
-      hoursTotal: number;
-      isToday: boolean;
-      isPast: boolean;
-    }> = [];
+    const rows: PlannerDaySummary[] = [];
 
     for (const detail of allWeekDetails) {
       const range = normalizedWeekRange(detail.week);
@@ -1438,6 +1452,69 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     () => plannerDaySummaries.filter((day) => day.isPast).sort((a, b) => b.dayDate.localeCompare(a.dayDate)),
     [plannerDaySummaries],
   );
+  const plannerDayByRef = useMemo(() => {
+    const byRef = new Map<string, PlannerDaySummary>();
+    for (const day of plannerDaySummaries) {
+      byRef.set(`${day.weekId}:${day.dayDate}`, day);
+    }
+    return byRef;
+  }, [plannerDaySummaries]);
+  const selectedPlannerDayDetail = useMemo(() => {
+    if (!plannerDayDetailRef) {
+      return null;
+    }
+    return plannerDayByRef.get(`${plannerDayDetailRef.weekId}:${plannerDayDetailRef.dayDate}`) ?? null;
+  }, [plannerDayByRef, plannerDayDetailRef]);
+  const plannerSearchResults = useMemo(() => {
+    const query = normalizeTaskKey(plannerSearchQuery);
+    if (!query || query.length < 2) {
+      return [] as PlannerSearchResult[];
+    }
+
+    return plannerDaySummaries
+      .map((day) => {
+        const previews = new Set<string>();
+
+        for (const task of day.tasks) {
+          const fields = [task.title, task.info];
+          if (fields.some((value) => normalizeTaskKey(value).includes(query))) {
+            previews.add(`Taak: ${task.title}`);
+          }
+        }
+
+        for (const block of day.hourBlocks) {
+          const fields = [block.taskText, block.projectText];
+          if (fields.some((value) => normalizeTaskKey(value).includes(query))) {
+            previews.add(`Uurblok: ${block.taskText || block.projectText || `${block.timeStart}-${block.timeEnd}`}`);
+          }
+        }
+
+        for (const entry of day.hourEntries) {
+          const fields = [entry.projectName, entry.noteText];
+          if (fields.some((value) => normalizeTaskKey(value).includes(query))) {
+            previews.add(`Uren: ${entry.projectName || entry.noteText || `${entry.hoursDecimal}u`}`);
+          }
+        }
+
+        const previewList = Array.from(previews).slice(0, 4);
+        if (!previewList.length) {
+          return null;
+        }
+
+        return {
+          key: `${day.key}:search`,
+          weekId: day.weekId,
+          weekLabel: day.weekLabel,
+          weekday: day.weekday,
+          dayDate: day.dayDate,
+          matchCount: previews.size,
+          previews: previewList,
+        } satisfies PlannerSearchResult;
+      })
+      .filter((item): item is PlannerSearchResult => Boolean(item))
+      .sort((a, b) => b.dayDate.localeCompare(a.dayDate) || a.weekLabel.localeCompare(b.weekLabel, "nl"))
+      .slice(0, 12);
+  }, [plannerDaySummaries, plannerSearchQuery]);
   const upcomingBlockGroups = useMemo(
     () =>
       plannerUpcomingDays
@@ -1720,40 +1797,68 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     },
     [todayIsoAmsterdam, weekdayIsoMap],
   );
-  const detailDay = plannerDayDetail ?? todoDay;
-  const detailDayIso = useMemo(() => weekdayIsoMap[detailDay] || null, [detailDay, weekdayIsoMap]);
+  const detailDay = selectedPlannerDayDetail?.weekday ?? todoDay;
+  const detailDayIso = selectedPlannerDayDetail?.dayDate ?? selectedDayIso;
   const detailDayIsToday = useMemo(() => {
     if (!todayIsoAmsterdam) {
       return false;
     }
-    if (detailDayIso) {
-      return detailDayIso === todayIsoAmsterdam;
+    return Boolean(detailDayIso && detailDayIso === todayIsoAmsterdam);
+  }, [detailDayIso, todayIsoAmsterdam]);
+  const detailTasks = useMemo(() => {
+    if (!selectedPlannerDayDetail) {
+      return groupedTasks[detailDay] ?? [];
     }
-    return todayWeekdayInWeek === detailDay;
-  }, [detailDay, detailDayIso, todayIsoAmsterdam, todayWeekdayInWeek]);
-  const detailTasks = useMemo(() => groupedTasks[detailDay] ?? [], [detailDay, groupedTasks]);
+
+    const blocks = selectedPlannerDayDetail.hourBlocks
+      .slice()
+      .sort(
+        (a, b) =>
+          a.timeStart.localeCompare(b.timeStart) ||
+          a.timeEnd.localeCompare(b.timeEnd) ||
+          a.position - b.position,
+      );
+
+    return mergeDayTasksWithHourBlocks(
+      selectedPlannerDayDetail.tasks,
+      blocks,
+      selectedPlannerDayDetail.weekId,
+      selectedPlannerDayDetail.weekday,
+      selectedPlannerDayDetail.dayDate,
+    );
+  }, [detailDay, groupedTasks, selectedPlannerDayDetail]);
   const detailDoneCount = useMemo(
     () => detailTasks.filter((task) => task.status === "klaar").length,
     [detailTasks],
   );
   const detailHourBlocks = useMemo(
-    () =>
-      orderedHourBlocks.filter(
-        (block) =>
-          shouldDisplayBlockForDay(block, detailDay, detailDayIso, activeRange),
-      ),
-    [activeRange, detailDay, detailDayIso, orderedHourBlocks],
+    () => {
+      if (selectedPlannerDayDetail) {
+        return selectedPlannerDayDetail.hourBlocks
+          .slice()
+          .sort(
+            (a, b) =>
+              a.timeStart.localeCompare(b.timeStart) ||
+              a.timeEnd.localeCompare(b.timeEnd) ||
+              a.position - b.position,
+          );
+      }
+
+      return orderedHourBlocks.filter(
+        (block) => shouldDisplayBlockForDay(block, detailDay, detailDayIso, activeRange),
+      );
+    },
+    [activeRange, detailDay, detailDayIso, orderedHourBlocks, selectedPlannerDayDetail],
   );
   const detailGroupedHourBlocks = useMemo(
     () => groupHourBlocksForDisplay(detailHourBlocks),
     [detailHourBlocks],
   );
   const detailHourEntries = useMemo(
-    () =>
-      (payload?.hourEntries ?? []).filter((entry) =>
-        detailDayIso ? entry.dayDate === detailDayIso : entry.weekday === detailDay,
-      ),
-    [detailDay, detailDayIso, payload?.hourEntries],
+    () => selectedPlannerDayDetail?.hourEntries ?? (payload?.hourEntries ?? []).filter((entry) =>
+      detailDayIso ? entry.dayDate === detailDayIso : entry.weekday === detailDay,
+    ),
+    [detailDay, detailDayIso, payload?.hourEntries, selectedPlannerDayDetail],
   );
   const detailHoursTotal = useMemo(
     () => Number(detailHourEntries.reduce((sum, entry) => sum + entry.hoursDecimal, 0).toFixed(2)),
@@ -1861,6 +1966,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         const projects = taskKey ? Array.from(projectSetByTaskKey.get(scopedTaskKey) ?? []) : [];
         return {
           taskId: task.id,
+          weekId: task.weekId,
           title: task.title,
           info: task.info,
           weekday: task.weekday,
@@ -1955,19 +2061,22 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   }, [completedTaskLogProjects, logProjectFilter]);
 
   const openPlannerDayDetail = useCallback(
-    (day: Weekday) => {
-      const dayIso = weekdayIsoMap[day] || "";
+    (day: Weekday, dayDate?: string | null, weekId?: string | null) => {
+      const dayIso = dayDate || weekdayIsoMap[day] || "";
+      const targetWeekId = weekId || payload?.week.id || "";
       setTodoDay(day);
-      setPlannerDayDetail(day);
+      if (targetWeekId && dayIso) {
+        setPlannerDayDetailRef({ weekId: targetWeekId, dayDate: dayIso });
+      }
       setTaskForm((prev) => ({ ...prev, weekday: day }));
       setHourForm((prev) => ({ ...prev, weekday: day, dayDate: dayIso || prev.dayDate }));
       setBlockForm((prev) => ({ ...prev, weekday: day, dayDate: dayIso || prev.dayDate }));
     },
-    [weekdayIsoMap],
+    [payload?.week.id, weekdayIsoMap],
   );
 
   const openPlannerDayDetailForWeek = useCallback(
-    async (weekId: string, day: Weekday) => {
+    async (weekId: string, day: Weekday, dayDate?: string | null) => {
       if (!weekId) {
         return;
       }
@@ -1979,13 +2088,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         }
       }
 
-      setTodoDay(day);
-      setPlannerDayDetail(day);
-      setTaskForm((prev) => ({ ...prev, weekday: day }));
-      setHourForm((prev) => ({ ...prev, weekday: day }));
-      setBlockForm((prev) => ({ ...prev, weekday: day }));
+      openPlannerDayDetail(day, dayDate, weekId);
     },
-    [loadData, payload?.week.id],
+    [loadData, openPlannerDayDetail, payload?.week.id],
   );
   const goToPlannerDate = useCallback(
     async (dateIso: string) => {
@@ -2018,22 +2123,30 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         }
       }
 
-      setTodoDay(weekday);
-      setPlannerDayDetail(weekday);
-      setTaskForm((prev) => ({ ...prev, weekday }));
-      setHourForm((prev) => ({ ...prev, weekday, dayDate: dateIso }));
-      setBlockForm((prev) => ({ ...prev, weekday, dayDate: dateIso }));
+      openPlannerDayDetail(weekday, dateIso, targetWeek.id);
       setNotice(`Dag geopend: ${formatIsoDateAmsterdam(dateIso)}.`);
     },
-    [loadData, orderedWeeksByDate, payload?.week.id],
+    [loadData, openPlannerDayDetail, orderedWeeksByDate, payload?.week.id],
   );
 
   const closePlannerDayDetail = useCallback(() => {
-    setPlannerDayDetail(null);
+    setPlannerDayDetailRef(null);
   }, []);
 
   useEffect(() => {
-    if (!plannerDayDetail) {
+    if (!plannerDayDetailRef) {
+      return;
+    }
+
+    if (selectedPlannerDayDetail) {
+      return;
+    }
+
+    setPlannerDayDetailRef(null);
+  }, [plannerDayDetailRef, selectedPlannerDayDetail]);
+
+  useEffect(() => {
+    if (!plannerDayDetailRef) {
       return;
     }
 
@@ -2045,22 +2158,22 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       deadlineAt: "",
       priority: "middel",
     });
-  }, [plannerDayDetail]);
+  }, [plannerDayDetailRef]);
 
   useEffect(() => {
-    if (!plannerDayDetail) {
+    if (!plannerDayDetailRef) {
       return;
     }
 
     const handler = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setPlannerDayDetail(null);
+        setPlannerDayDetailRef(null);
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [plannerDayDetail]);
+  }, [plannerDayDetailRef]);
 
   const handlePinSubmit = async () => {
     setError(null);
@@ -2362,8 +2475,18 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     }
 
     if (outcome.data?.task) {
+      const nextDayDate =
+        outcome.data.task.deadlineAt?.slice(0, 10) ??
+        detailDayIso ??
+        selectedPlannerDayDetail?.dayDate ??
+        "";
       setTodoDay(outcome.data.task.weekday);
-      setPlannerDayDetail(outcome.data.task.weekday);
+      if (nextDayDate) {
+        setPlannerDayDetailRef({
+          weekId: outcome.data.task.weekId,
+          dayDate: nextDayDate,
+        });
+      }
     }
 
     setDetailTaskForm((prev) => ({
@@ -2374,7 +2497,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       deadlineAt: "",
     }));
     setDetailTaskComposerExpanded(false);
-  }, [detailDay, detailTaskForm, payload?.week?.id, sendMutation]);
+  }, [detailDay, detailDayIso, detailTaskForm, payload?.week?.id, selectedPlannerDayDetail?.dayDate, sendMutation]);
 
   const uploadExcel = async (file: File) => {
     setError(null);
@@ -2630,6 +2753,68 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
             </button>
           </div>
         </div>
+
+        <div className="mt-3 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Zoek Project Of Taak</p>
+              <p className="mt-1 text-sm text-blue-50">
+                Zoek op projectnaam, taaknaam of reflectietekst en open direct de juiste dag.
+              </p>
+            </div>
+            <input
+              value={plannerSearchQuery}
+              className="w-full rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm text-white sm:max-w-md"
+              placeholder="Bijv. portfolio, reflectie, logo..."
+              onChange={(event) => setPlannerSearchQuery(event.target.value)}
+            />
+          </div>
+
+          {plannerSearchQuery.trim().length >= 2 ? (
+            <div className="mt-3 space-y-2">
+              {plannerSearchResults.length ? (
+                plannerSearchResults.map((result) => (
+                  <div
+                    key={result.key}
+                    className="rounded-xl border border-white/15 bg-slate-950/20 p-3 text-sm text-white"
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-medium">
+                          {weekdayLabels[result.weekday]} ({formatDayDateLabel(result.dayDate)})
+                        </p>
+                        <p className="text-xs text-blue-100">
+                          {result.weekLabel} • {result.matchCount} match{result.matchCount === 1 ? "" : "es"}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {result.previews.map((preview) => (
+                            <span
+                              key={`${result.key}-${preview}`}
+                              className="rounded-full border border-white/20 bg-white/10 px-2 py-1 text-[11px] text-blue-50"
+                            >
+                              {preview}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900"
+                        onClick={() => void openPlannerDayDetailForWeek(result.weekId, result.weekday, result.dayDate)}
+                      >
+                        Open dag
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-xl border border-white/15 bg-slate-950/20 px-3 py-3 text-sm text-blue-50">
+                  Geen resultaten gevonden.
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <nav className="mt-6 flex flex-wrap gap-2">
@@ -2801,7 +2986,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     <button
                       type="button"
                       className="text-left font-semibold text-slate-900 hover:text-blue-700"
-                      onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday)}
+                      onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
                     >
                       {weekdayLabels[day.weekday]}
                       {day.dayDate ? (
@@ -2816,7 +3001,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     <button
                       type="button"
                       className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                      onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday)}
+                      onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
                     >
                       Open dag
                     </button>
@@ -3214,7 +3399,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       <button
                         type="button"
                         className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                        onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday)}
+                        onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
                       >
                         Open dag
                       </button>
@@ -3323,7 +3508,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                           <button
                             type="button"
                             className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                            onClick={() => openPlannerDayDetail(item.weekday)}
+                            onClick={() =>
+                              void openPlannerDayDetailForWeek(item.weekId, item.weekday, item.dayDate)
+                            }
                           >
                             Open dag
                           </button>
@@ -3517,7 +3704,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                           <button
                             type="button"
                             className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                            onClick={() => void openPlannerDayDetailForWeek(group.weekId, group.weekday)}
+                            onClick={() => void openPlannerDayDetailForWeek(group.weekId, group.weekday, group.dayDate)}
                           >
                             Open dag
                           </button>
@@ -3912,7 +4099,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         </aside>
       </div>
 
-      {plannerDayDetail ? (
+      {selectedPlannerDayDetail ? (
         <div
           className="fixed inset-0 z-50 bg-slate-900/45 p-3 sm:p-6"
           onClick={closePlannerDayDetail}
@@ -3925,7 +4112,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
               <div>
                 <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Dag detail</p>
                 <h2 className="text-xl font-semibold text-slate-900">
-                  {weekdayLabels[plannerDayDetail]}
+                  {weekdayLabels[detailDay]}
                   {detailDayIso ? (
                     <span className="ml-2 text-base font-normal text-slate-500">
                       ({formatDayDateLabel(detailDayIso)})
@@ -3936,7 +4123,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   Taken {detailDoneCount}/{detailTasks.length} klaar • Uurblokken {detailHourBlocks.length} • Uren {detailHoursTotal}u
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Live: {liveNowAmsterdam}
+                  {selectedPlannerDayDetail.weekLabel} • Live: {liveNowAmsterdam}
                 </p>
               </div>
               <button
