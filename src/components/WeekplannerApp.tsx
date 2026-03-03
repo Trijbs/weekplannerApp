@@ -52,6 +52,8 @@ type HourBlockDisplayGroup = {
 
 type HourEntryDayGroup = {
   key: string;
+  weekId: string;
+  weekLabel: string;
   dayDate: string;
   weekday: Weekday;
   totalHours: number;
@@ -1334,6 +1336,20 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const allHourBlocks = useMemo(() => allWeekDetails.flatMap((detail) => detail.hourBlocks), [allWeekDetails]);
   const allHourEntries = useMemo(() => allWeekDetails.flatMap((detail) => detail.hourEntries), [allWeekDetails]);
   const allHistory = useMemo(() => allWeekDetails.flatMap((detail) => detail.history), [allWeekDetails]);
+  const weekMetaById = useMemo(() => {
+    const weekMap = new Map<string, { weekLabel: string; startDate: string; endDate: string }>();
+
+    for (const detail of allWeekDetails) {
+      const range = normalizedWeekRange(detail.week);
+      weekMap.set(detail.week.id, {
+        weekLabel: detail.week.weekLabel,
+        startDate: range.startDate,
+        endDate: range.endDate,
+      });
+    }
+
+    return weekMap;
+  }, [allWeekDetails]);
   const dayDateByWeekAndWeekday = useMemo(() => {
     const dateMap = new Map<string, string>();
 
@@ -1555,11 +1571,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     const dayMap = new Map<string, HourEntryDayGroup>();
 
     for (const entry of allHourEntries) {
-      const key = `${entry.dayDate}:${entry.weekday}`;
+      const weekMeta = weekMetaById.get(entry.weekId);
+      const key = `${entry.weekId}:${entry.dayDate}:${entry.weekday}`;
       const existing = dayMap.get(key);
       if (!existing) {
         dayMap.set(key, {
           key,
+          weekId: entry.weekId,
+          weekLabel: weekMeta?.weekLabel ?? "Week",
           dayDate: entry.dayDate,
           weekday: entry.weekday,
           totalHours: Number(entry.hoursDecimal.toFixed(2)),
@@ -1584,8 +1603,44 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
               a.updatedAt.localeCompare(b.updatedAt),
           ),
       }))
-      .sort((a, b) => a.dayDate.localeCompare(b.dayDate));
-  }, [allHourEntries]);
+      .sort((a, b) => {
+        const aStart = weekMetaById.get(a.weekId)?.startDate ?? a.dayDate;
+        const bStart = weekMetaById.get(b.weekId)?.startDate ?? b.dayDate;
+        return aStart.localeCompare(bStart) || a.dayDate.localeCompare(b.dayDate);
+      });
+  }, [allHourEntries, weekMetaById]);
+  const visibleHoursSummary = useMemo(() => {
+    const projectTotals = new Map<string, number>();
+    const weekTotals = new Map<string, { weekId: string; weekLabel: string; totalHours: number; startDate: string }>();
+    let totalHours = 0;
+
+    for (const entry of allHourEntries) {
+      totalHours += entry.hoursDecimal;
+
+      const projectName = entry.projectName.trim() || "Zonder project";
+      projectTotals.set(projectName, Number(((projectTotals.get(projectName) ?? 0) + entry.hoursDecimal).toFixed(2)));
+
+      const weekMeta = weekMetaById.get(entry.weekId);
+      const currentWeek = weekTotals.get(entry.weekId) ?? {
+        weekId: entry.weekId,
+        weekLabel: weekMeta?.weekLabel ?? "Week",
+        totalHours: 0,
+        startDate: weekMeta?.startDate ?? entry.dayDate,
+      };
+      currentWeek.totalHours = Number((currentWeek.totalHours + entry.hoursDecimal).toFixed(2));
+      weekTotals.set(entry.weekId, currentWeek);
+    }
+
+    return {
+      totalHours: Number(totalHours.toFixed(2)),
+      perProjectTotals: Array.from(projectTotals.entries())
+        .map(([projectName, total]) => ({ projectName, totalHours: Number(total.toFixed(2)) }))
+        .sort((a, b) => b.totalHours - a.totalHours || a.projectName.localeCompare(b.projectName, "nl")),
+      perWeekTotals: Array.from(weekTotals.values()).sort(
+        (a, b) => a.startDate.localeCompare(b.startDate) || a.weekLabel.localeCompare(b.weekLabel, "nl"),
+      ),
+    };
+  }, [allHourEntries, weekMetaById]);
   const dayOverviewCardClass = "p-4 sm:p-5";
   const dayOverviewBodyClass = "mt-3 space-y-2";
   const hourSelectOptions = useMemo(
@@ -2880,14 +2935,36 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-600">Totaal week</p>
+                  <p className="text-xs text-slate-600">Totaal zichtbaar</p>
+                  <p className="text-2xl font-semibold text-slate-900">{visibleHoursSummary.totalHours}u</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-600">Actieve week</p>
                   <p className="text-2xl font-semibold text-slate-900">{payload.hourSummary.weeklyTotalHours}u</p>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs text-slate-600">Weken met uren</p>
+                  <p className="text-2xl font-semibold text-slate-900">{visibleHoursSummary.perWeekTotals.length}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-3">
+                  <p className="text-xs text-slate-600">Per week</p>
+                  <div className="mt-1 flex flex-wrap gap-2 text-sm">
+                    {visibleHoursSummary.perWeekTotals.length ? (
+                      visibleHoursSummary.perWeekTotals.map((item) => (
+                        <span key={item.weekId} className="rounded-full bg-slate-200 px-2 py-1 text-slate-800">
+                          {item.weekLabel}: {item.totalHours}u
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-slate-500">Nog geen data</span>
+                    )}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-3">
                   <p className="text-xs text-slate-600">Per project</p>
                   <div className="mt-1 flex flex-wrap gap-2 text-sm">
-                    {payload.hourSummary.perProjectTotals.length ? (
-                      payload.hourSummary.perProjectTotals.map((item) => (
+                    {visibleHoursSummary.perProjectTotals.length ? (
+                      visibleHoursSummary.perProjectTotals.map((item) => (
                         <span key={item.projectName} className="rounded-full bg-slate-900 px-2 py-1 text-white">
                           {item.projectName}: {item.totalHours}u
                         </span>
@@ -2908,6 +2985,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                           {weekdayLabels[group.weekday]}
                           <span className="ml-2 text-xs font-normal text-slate-500">
                             ({formatDayDateLabel(group.dayDate)})
+                          </span>
+                          <span className="ml-2 rounded bg-white px-2 py-0.5 text-[11px] font-normal text-slate-600">
+                            {group.weekLabel}
                           </span>
                         </h3>
                         <span className="rounded-full border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700">
