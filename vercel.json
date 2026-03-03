@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron/sync-drive",
-      "schedule": "0 * * * *"
-    }
-  ]
-}

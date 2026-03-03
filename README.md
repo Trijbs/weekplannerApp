@@ -11,7 +11,7 @@ Dutch-first weekplanner PWA with:
 
 ## Stack
 - Next.js 16 + TypeScript + Tailwind
-- Neon/Postgres via `@netlify/neon`
+- Neon/Postgres via the `@netlify/neon` SQL client
 - Local JSON fallback for development only when no remote DB env vars are set
 - GitHub Actions scheduled sync for Google Drive
 - Render free web service for hosting
@@ -36,7 +36,7 @@ Primary runtime variables:
 - `NEXT_PUBLIC_APP_URL`
 - `GOOGLE_REDIRECT_URI`
 
-Backward-compatible fallbacks:
+Legacy fallbacks still supported by the code:
 - `NETLIFY_DATABASE_URL`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -49,7 +49,7 @@ Optional local variables:
 ## Database behavior
 The app selects the database implementation in this order:
 1. Neon/Postgres via `DATABASE_URL`
-2. Neon/Postgres via `NETLIFY_DATABASE_URL`
+2. Legacy Neon/Postgres fallback via `NETLIFY_DATABASE_URL`
 3. Supabase via `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
 4. Local JSON fallback for development
 
@@ -118,12 +118,12 @@ npm run db:neon:init
 
 The script accepts:
 - `DATABASE_URL`
-- or `NETLIFY_DATABASE_URL`
+- legacy fallback `NETLIFY_DATABASE_URL`
 
 ## Migration helper
 If you still need the one-time Supabase -> Neon migration script, it accepts:
 - `DATABASE_URL`
-- or `NETLIFY_DATABASE_URL`
+- legacy fallback `NETLIFY_DATABASE_URL`
 - plus `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
 
 ## Tests

@@ -1,7 +1,7 @@
 -- Hourly Drive sync trigger via pg_cron using secrets from Supabase Vault.
 --
 -- Configure once (SQL Editor), do not commit raw secrets:
--- select vault.create_secret('https://your-vercel-domain/api/cron/sync-drive', 'weekplanner_cron_url', 'Weekplanner cron endpoint');
+-- select vault.create_secret('https://your-app-domain/api/cron/sync-drive', 'weekplanner_cron_url', 'Weekplanner cron endpoint');
 -- select vault.create_secret('your-cron-secret', 'weekplanner_cron_secret', 'Weekplanner cron bearer token');
 
 create extension if not exists pg_cron;
