@@ -1608,7 +1608,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       .sort((a, b) => {
         const aStart = weekMetaById.get(a.weekId)?.startDate ?? a.dayDate;
         const bStart = weekMetaById.get(b.weekId)?.startDate ?? b.dayDate;
-        return aStart.localeCompare(bStart) || a.dayDate.localeCompare(b.dayDate);
+        return bStart.localeCompare(aStart) || b.dayDate.localeCompare(a.dayDate);
       });
   }, [allHourEntries, weekMetaById]);
   const visibleHoursSummary = useMemo(() => {
