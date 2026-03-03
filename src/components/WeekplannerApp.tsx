@@ -874,9 +874,11 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [liveNowAmsterdam, setLiveNowAmsterdam] = useState("");
   const [todoDay, setTodoDay] = useState<Weekday>("maandag");
   const [plannerDayDetail, setPlannerDayDetail] = useState<Weekday | null>(null);
+  const [daySearchDate, setDaySearchDate] = useState("");
   const [logDateFilter, setLogDateFilter] = useState<"all" | "today" | "week">("all");
   const [logProjectFilter, setLogProjectFilter] = useState<string>("all");
   const [hiddenLogTaskIds, setHiddenLogTaskIds] = useState<string[]>([]);
+  const [hoursNotesExpanded, setHoursNotesExpanded] = useState(false);
 
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [weekSnapshots, setWeekSnapshots] = useState<Record<string, WeekDetailPayload>>({});
@@ -1985,6 +1987,46 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     },
     [loadData, payload?.week.id],
   );
+  const goToPlannerDate = useCallback(
+    async (dateIso: string) => {
+      if (!dateIso) {
+        setError("Kies eerst een datum om naartoe te gaan.");
+        return;
+      }
+
+      const weekday = weekdayFromIsoDate(dateIso);
+      if (!weekday) {
+        setError("Kies een werkdag tussen maandag en vrijdag.");
+        return;
+      }
+
+      const targetWeek = orderedWeeksByDate.find((week) => {
+        const range = normalizedWeekRange(week);
+        return dateIso >= range.startDate && dateIso <= range.endDate;
+      });
+
+      if (!targetWeek) {
+        setError("Voor deze datum is nog geen week of planning beschikbaar.");
+        return;
+      }
+
+      setTab("planner");
+      if (payload?.week.id !== targetWeek.id) {
+        const loaded = await loadData(targetWeek.id);
+        if (!loaded) {
+          return;
+        }
+      }
+
+      setTodoDay(weekday);
+      setPlannerDayDetail(weekday);
+      setTaskForm((prev) => ({ ...prev, weekday }));
+      setHourForm((prev) => ({ ...prev, weekday, dayDate: dateIso }));
+      setBlockForm((prev) => ({ ...prev, weekday, dayDate: dateIso }));
+      setNotice(`Dag geopend: ${formatIsoDateAmsterdam(dateIso)}.`);
+    },
+    [loadData, orderedWeeksByDate, payload?.week.id],
+  );
 
   const closePlannerDayDetail = useCallback(() => {
     setPlannerDayDetail(null);
@@ -2564,6 +2606,30 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           </span>
           <span className="rounded-full border border-white/30 px-2 py-1">Tijdzone: Europe/Amsterdam</span>
         </div>
+
+        <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Zoek Dag</p>
+            <p className="mt-1 text-sm text-blue-50">
+              Kies een datum en open direct het dagdetail om oude of aankomende informatie terug te vinden.
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <input
+              type="date"
+              value={daySearchDate}
+              className="rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm text-white"
+              onChange={(event) => setDaySearchDate(event.target.value)}
+            />
+            <button
+              type="button"
+              className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900"
+              onClick={() => void goToPlannerDate(daySearchDate)}
+            >
+              Ga naar dag
+            </button>
+          </div>
+        </div>
       </header>
 
       <nav className="mt-6 flex flex-wrap gap-2">
@@ -2804,6 +2870,21 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
           {tab === "hours" && payload ? (
             <div className="space-y-5">
+              <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Dagreflecties</p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Gebruik grotere notitievakken voor reflecties per dag en maak ze later weer compact.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  onClick={() => setHoursNotesExpanded((prev) => !prev)}
+                >
+                  {hoursNotesExpanded ? "Compacte notities" : "Grotere notities"}
+                </button>
+              </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <input
                   type="date"
@@ -2854,10 +2935,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   placeholder="Project / categorie"
                   onChange={(event) => setHourForm((prev) => ({ ...prev, projectName: event.target.value }))}
                 />
-                <input
+                <textarea
                   value={hourForm.noteText}
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  placeholder="Notitie"
+                  rows={hoursNotesExpanded ? 5 : 2}
+                  className={`rounded-xl border border-slate-300 px-3 py-2 resize-y ${
+                    hoursNotesExpanded ? "min-h-[8rem] sm:col-span-2 lg:col-span-3" : "min-h-[5.5rem] sm:col-span-2 lg:col-span-2"
+                  }`}
+                  placeholder="Reflectie of notitie van deze dag"
                   onChange={(event) => setHourForm((prev) => ({ ...prev, noteText: event.target.value }))}
                 />
                 <div className="rounded-xl border border-slate-300 bg-slate-50 p-3 sm:col-span-2 lg:col-span-3">
@@ -2999,7 +3083,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       <div className="mt-3 space-y-2">
                         {group.entries.map((entry: HourEntry) => (
                           <div key={entry.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
                               <input
                                 key={`${entry.id}-${entry.updatedAt}-day`}
                                 type="date"
@@ -3070,11 +3154,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                   )
                                 }
                               />
-                              <input
+                              <textarea
                                 key={`${entry.id}-${entry.updatedAt}-note`}
+                                rows={hoursNotesExpanded ? 5 : 2}
                                 defaultValue={entry.noteText}
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                                placeholder="Notitie"
+                                className={`rounded-lg border border-slate-300 px-2 py-1 text-sm resize-y lg:col-span-2 ${
+                                  hoursNotesExpanded ? "min-h-[8rem]" : "min-h-[5.5rem]"
+                                }`}
+                                placeholder="Reflectie of notitie"
                                 onBlur={(event) =>
                                   void sendMutation(
                                     `/api/hours/${entry.id}`,
@@ -3087,7 +3174,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                               />
                               <button
                                 type="button"
-                                className="rounded-lg border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50"
+                                className="rounded-lg border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50 lg:col-span-1"
                                 onClick={() => void sendMutation(`/api/hours/${entry.id}`, "DELETE", {}, "Urenregel verwijderd.")}
                               >
                                 Verwijder
