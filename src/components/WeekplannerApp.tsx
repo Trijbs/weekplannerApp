@@ -888,6 +888,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     endAt: "17:00",
     breakMinutes: "0",
   });
+  const [hourEntryHoursEditing, setHourEntryHoursEditing] = useState<Record<string, boolean>>({});
+  const [hourEntryHoursDrafts, setHourEntryHoursDrafts] = useState<Record<string, string>>({});
 
   const [blockForm, setBlockForm] = useState(() => {
     const dayDate = todayIsoForTimezone("Europe/Amsterdam");
@@ -1680,6 +1682,35 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       ),
     };
   }, [allHourEntries, weekMetaById]);
+  useEffect(() => {
+    const validIds = new Set(allHourEntries.map((entry) => entry.id));
+
+    setHourEntryHoursEditing((prev) => {
+      let changed = false;
+      const next: Record<string, boolean> = {};
+      for (const [entryId, isEditing] of Object.entries(prev)) {
+        if (!validIds.has(entryId)) {
+          changed = true;
+          continue;
+        }
+        next[entryId] = isEditing;
+      }
+      return changed ? next : prev;
+    });
+
+    setHourEntryHoursDrafts((prev) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      for (const [entryId, draftValue] of Object.entries(prev)) {
+        if (!validIds.has(entryId)) {
+          changed = true;
+          continue;
+        }
+        next[entryId] = draftValue;
+      }
+      return changed ? next : prev;
+    });
+  }, [allHourEntries]);
   const dayOverviewCardClass = "p-4 sm:p-5";
   const dayOverviewBodyClass = "mt-3 space-y-2";
   const hourSelectOptions = useMemo(
@@ -2472,6 +2503,47 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     (taskId: string) => sendMutation(`/api/tasks/${taskId}`, "DELETE", {}, "Taak verwijderd."),
     [sendMutation],
   );
+  const startHourEntryHoursEdit = useCallback((entry: HourEntry) => {
+    setHourEntryHoursEditing((prev) => ({ ...prev, [entry.id]: true }));
+    setHourEntryHoursDrafts((prev) => ({ ...prev, [entry.id]: String(entry.hoursDecimal) }));
+  }, []);
+  const cancelHourEntryHoursEdit = useCallback((entryId: string) => {
+    setHourEntryHoursEditing((prev) => {
+      const next = { ...prev };
+      delete next[entryId];
+      return next;
+    });
+    setHourEntryHoursDrafts((prev) => {
+      const next = { ...prev };
+      delete next[entryId];
+      return next;
+    });
+  }, []);
+  const saveHourEntryHours = useCallback(
+    async (entryId: string) => {
+      const draftValue = hourEntryHoursDrafts[entryId];
+      const parsedValue = Number(draftValue);
+      if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+        setError("Ongeldig aantal uren.");
+        return;
+      }
+
+      const outcome = await sendMutation(
+        `/api/hours/${entryId}`,
+        "PATCH",
+        { hoursDecimal: parsedValue },
+        "Urenregel bijgewerkt.",
+        { localUpdate: true, silent: true },
+      );
+
+      if (!outcome.ok) {
+        return;
+      }
+
+      cancelHourEntryHoursEdit(entryId);
+    },
+    [cancelHourEntryHoursEdit, hourEntryHoursDrafts, sendMutation],
+  );
 
   const uploadExcel = async (file: File) => {
     setError(null);
@@ -3098,9 +3170,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       </div>
 
                       <div className="mt-3 space-y-2">
-                        {group.entries.map((entry: HourEntry) => (
-                          <div key={entry.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
+                        {group.entries.map((entry: HourEntry) => {
+                          const isEditingHours = Boolean(hourEntryHoursEditing[entry.id]);
+                          const hoursDraft = hourEntryHoursDrafts[entry.id] ?? String(entry.hoursDecimal);
+
+                          return (
+                            <div key={entry.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
                               <input
                                 key={`${entry.id}-${entry.updatedAt}-day`}
                                 type="date"
@@ -3116,46 +3192,55 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                   )
                                 }
                               />
-                              <select
-                                key={`${entry.id}-${entry.updatedAt}-hours`}
-                                defaultValue={String(entry.hoursDecimal)}
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                                onWheel={(event) => {
-                                  event.preventDefault();
-                                  const options = hourOptionsWithValue(entry.hoursDecimal);
-                                  const currentValue = (event.currentTarget as HTMLSelectElement).value;
-                                  const currentIndex = Math.max(0, options.indexOf(currentValue));
-                                  const direction = event.deltaY > 0 ? 1 : -1;
-                                  const nextIndex = Math.min(options.length - 1, Math.max(0, currentIndex + direction));
-                                  const nextValue = options[nextIndex] ?? currentValue;
-                                  if (nextValue === currentValue) {
-                                    return;
-                                  }
-                                  (event.currentTarget as HTMLSelectElement).value = nextValue;
-                                  void sendMutation(
-                                    `/api/hours/${entry.id}`,
-                                    "PATCH",
-                                    { hoursDecimal: Number(nextValue) },
-                                    "Urenregel bijgewerkt.",
-                                    { localUpdate: true, silent: true },
-                                  );
-                                }}
-                                onChange={(event) =>
-                                  void sendMutation(
-                                    `/api/hours/${entry.id}`,
-                                    "PATCH",
-                                    { hoursDecimal: Number(event.target.value) },
-                                    "Urenregel bijgewerkt.",
-                                    { localUpdate: true, silent: true },
-                                  )
-                                }
-                              >
-                                {hourOptionsWithValue(entry.hoursDecimal).map((value) => (
-                                  <option key={`${entry.id}-hours-${value}`} value={value}>
-                                    {value}u
-                                  </option>
-                                ))}
-                              </select>
+                              <div className="rounded-lg border border-slate-300 px-3 py-2">
+                                {isEditingHours ? (
+                                  <div className="space-y-2">
+                                    <select
+                                      value={hoursDraft}
+                                      className="w-full rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                      onChange={(event) =>
+                                        setHourEntryHoursDrafts((prev) => ({
+                                          ...prev,
+                                          [entry.id]: event.target.value,
+                                        }))
+                                      }
+                                    >
+                                      {hourOptionsWithValue(hoursDraft).map((value) => (
+                                        <option key={`${entry.id}-hours-${value}`} value={value}>
+                                          {value}u
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <div className="flex flex-wrap gap-2">
+                                      <button
+                                        type="button"
+                                        className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-medium text-white"
+                                        onClick={() => void saveHourEntryHours(entry.id)}
+                                      >
+                                        Opslaan
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                                        onClick={() => cancelHourEntryHoursEdit(entry.id)}
+                                      >
+                                        Annuleer
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <p className="text-2xl font-semibold text-slate-900">{entry.hoursDecimal}u</p>
+                                    <button
+                                      type="button"
+                                      className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                                      onClick={() => startHourEntryHoursEdit(entry)}
+                                    >
+                                      Corrigeer uren
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                               <input
                                 key={`${entry.id}-${entry.updatedAt}-project`}
                                 defaultValue={entry.projectName}
@@ -3196,10 +3281,11 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                               >
                                 Verwijder
                               </button>
+                              </div>
+                              <p className="mt-2 text-xs text-slate-500">{weekdayLabels[entry.weekday]}</p>
                             </div>
-                            <p className="mt-2 text-xs text-slate-500">{weekdayLabels[entry.weekday]}</p>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </section>
                   ))
