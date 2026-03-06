@@ -3978,6 +3978,45 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
             </div>
           ) : null}
 
+          <div className="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block">
+            <h2 className="text-sm font-semibold text-slate-900">Historie</h2>
+            <div className="mt-3 max-h-[360px] space-y-3 overflow-auto">
+              {payload?.history?.length ? (
+                payload.history.map((item: TaskHistory) => (
+                  <article key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs text-slate-500">
+                      {new Date(item.createdAt).toLocaleString("nl-NL", { timeZone: "Europe/Amsterdam" })}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-800">{item.noteText}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.actor}</p>
+                  </article>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">Nog geen historie.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block">
+            <h2 className="text-sm font-semibold text-slate-900">Laatste imports</h2>
+            <div className="mt-3 space-y-2">
+              {payload?.importJobs?.length ? (
+                payload.importJobs.slice(0, 6).map((job) => (
+                  <div key={job.id} className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    <p className="font-medium">{job.fileName}</p>
+                    <p>
+                      {job.provider} • {job.status}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">Nog geen imports.</p>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        <div className="order-3 space-y-4 lg:hidden">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">Historie</h2>
             <div className="mt-3 max-h-[360px] space-y-3 overflow-auto">
@@ -4014,7 +4053,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
               )}
             </div>
           </div>
-        </aside>
+        </div>
       </div>
 
       {selectedPlannerDayDetail ? (
