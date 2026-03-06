@@ -20,6 +20,10 @@ body {
   min-height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   color: var(--foreground);
@@ -28,8 +32,30 @@ body {
     radial-gradient(circle at 90% 0%, #bfdbfe 0%, transparent 26%),
     var(--background);
   font-family: var(--font-sans), "Segoe UI", sans-serif;
+  overflow-x: hidden;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+img,
+svg {
+  max-width: 100%;
+  height: auto;
 }
 
 a {
   color: inherit;
+}
+
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

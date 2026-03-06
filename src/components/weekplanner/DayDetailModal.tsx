@@ -68,15 +68,15 @@ export function DayDetailModal({
   onTaskDelete,
 }: DayDetailModalProps) {
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/45 p-3 sm:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-slate-950/55 p-0 sm:p-6" onClick={onClose}>
       <div
-        className="mx-auto flex max-h-[calc(100vh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="mx-auto flex h-[100dvh] w-full max-w-4xl flex-col overflow-y-auto bg-white shadow-2xl sm:max-h-[calc(100vh-3rem)] sm:rounded-2xl lg:overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+        <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
             <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Dag detail</p>
-            <h2 className="text-xl font-semibold text-slate-900">
+            <h2 className="text-xl font-semibold text-slate-900 sm:text-2xl">
               {weekdayLabels[detailDay]}
               {detailDayIso ? (
                 <span className="ml-2 text-base font-normal text-slate-500">
@@ -93,18 +93,18 @@ export function DayDetailModal({
           </div>
           <button
             type="button"
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 sm:self-auto"
             onClick={onClose}
           >
             Sluiten
           </button>
         </div>
 
-        <div className="grid auto-rows-fr gap-4 overflow-auto p-4 sm:grid-cols-3 sm:p-6">
-          <section className="flex min-h-[24rem] flex-col rounded-xl border border-slate-200 p-3">
+        <div className="grid gap-3 p-3 lg:auto-rows-fr lg:grid-cols-3 lg:gap-4 lg:overflow-auto lg:p-6">
+          <section className="flex min-h-0 flex-col rounded-xl border border-slate-200 p-3 lg:min-h-[24rem]">
             <h3 className="text-sm font-semibold text-slate-900">Taken</h3>
             <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
                   Snelle taak voor {weekdayLabels[detailDay]}
                   {detailDayIso ? ` (${detailDayLabel ?? formatDayDateLabel(detailDayIso)})` : ""}
@@ -118,7 +118,7 @@ export function DayDetailModal({
                 </button>
               </div>
 
-              <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1.7fr)_minmax(0,1.1fr)_minmax(0,1.15fr)_auto]">
+              <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.1fr)_minmax(0,1.15fr)_auto]">
                 <input
                   value={detailTaskForm.title}
                   className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
@@ -160,7 +160,7 @@ export function DayDetailModal({
               </div>
 
               {detailTaskComposerExpanded ? (
-                <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(0,1fr)]">
+                <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(0,1fr)]">
                   <input
                     value={detailTaskForm.info}
                     className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
@@ -194,7 +194,7 @@ export function DayDetailModal({
               ) : null}
             </div>
 
-            <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
+            <div className="mt-3 flex-1 space-y-2 lg:overflow-y-auto lg:pr-1">
               {detailTasks.length ? (
                 detailTasks.map((task) => (
                   <article key={task.id} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
@@ -253,7 +253,7 @@ export function DayDetailModal({
                           )
                         }
                       />
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2 md:grid-cols-2">
                         <select
                           key={`${task.id}-${task.updatedAt}-detail-priority`}
                           defaultValue={task.priority}
@@ -298,10 +298,10 @@ export function DayDetailModal({
             </div>
           </section>
 
-          <section className="flex min-h-[24rem] flex-col rounded-xl border border-slate-200 p-3">
+          <section className="flex min-h-0 flex-col rounded-xl border border-slate-200 p-3 lg:min-h-[24rem]">
             <h3 className="text-sm font-semibold text-slate-900">Uurblokken</h3>
             {detailDayIsToday ? <p className="mt-1 text-xs text-blue-700">Realtime: {liveNowAmsterdam}</p> : null}
-            <div className="mt-2 flex-1 space-y-2 overflow-y-auto pr-1">
+            <div className="mt-2 flex-1 space-y-2 lg:overflow-y-auto lg:pr-1">
               {detailGroupedHourBlocks.length ? (
                 detailGroupedHourBlocks.map((blockGroup) => {
                   const isActiveNow =
@@ -340,9 +340,9 @@ export function DayDetailModal({
             </div>
           </section>
 
-          <section className="flex min-h-[24rem] flex-col rounded-xl border border-slate-200 p-3">
+          <section className="flex min-h-0 flex-col rounded-xl border border-slate-200 p-3 lg:min-h-[24rem]">
             <h3 className="text-sm font-semibold text-slate-900">Urenregistratie</h3>
-            <div className="mt-2 flex-1 space-y-2 overflow-y-auto pr-1">
+            <div className="mt-2 flex-1 space-y-2 lg:overflow-y-auto lg:pr-1">
               {detailHourEntries.length ? (
                 detailHourEntries.map((entry) => (
                   <article key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 p-2">

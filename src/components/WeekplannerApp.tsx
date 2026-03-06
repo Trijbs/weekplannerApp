@@ -1711,8 +1711,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       return changed ? next : prev;
     });
   }, [allHourEntries]);
-  const dayOverviewCardClass = "p-4 sm:p-5";
-  const dayOverviewBodyClass = "mt-3 space-y-2";
+  const dayOverviewCardClass = "p-3.5 sm:p-5";
+  const dayOverviewBodyClass = "mt-3 space-y-3";
   const hourSelectOptions = useMemo(
     () => hourOptionsWithValue(hourForm.hoursDecimal),
     [hourForm.hoursDecimal],
@@ -2679,7 +2679,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+    <div className="mx-auto min-h-screen w-full max-w-6xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
       <PlannerHeader
         currentWeekLabel={payload?.week.weekLabel ?? "Week"}
         currentRangeText={currentRangeText}
@@ -2721,7 +2721,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         }}
       />
 
-      <nav className="mt-6 flex flex-wrap gap-2">
+      <nav className="mt-5 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
         <button
           type="button"
           className={`rounded-xl px-4 py-2 text-sm ${tab === "planner" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
@@ -2759,8 +2759,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         </button>
       </nav>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_320px]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="order-2 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-6 lg:order-1">
           {!payload ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               Weekgegevens laden...
@@ -3837,44 +3837,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           ) : null}
         </section>
 
-        <aside className="space-y-4">
-          {notice ? (
-            <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              {notice}
-            </div>
-          ) : null}
-
-          {error ? <ApiError message={error} /> : null}
-
-          {inlineFeedback ? (
-            <div
-              className={`rounded-xl border px-3 py-2 text-xs transition-all duration-300 ${
-                inlineFeedback.status === "saving"
-                  ? "border-blue-300 bg-blue-50 text-blue-700"
-                  : inlineFeedback.status === "saved"
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                    : inlineFeedback.status === "queued"
-                      ? "border-amber-300 bg-amber-50 text-amber-800"
-                      : "border-red-300 bg-red-50 text-red-700"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span>{inlineFeedback.message}</span>
-                {inlineFeedback.status === "saving" ? (
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-current" />
-                ) : (
-                  <span className="text-[10px] uppercase tracking-wide">sync</span>
-                )}
-              </div>
-            </div>
-          ) : null}
-
+        <aside className="order-1 flex flex-col gap-4 lg:order-2">
           <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${dayOverviewCardClass}`}>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-sm font-semibold text-slate-900">Dagoverzicht</h2>
               <select
                 value={todoDay}
-                className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
                 onChange={(event) => setTodoDay(event.target.value as Weekday)}
               >
                 {orderedWeekdays.map((day) => (
@@ -3977,6 +3946,37 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
               </div>
             </div>
           </div>
+
+          {notice ? (
+            <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+              {notice}
+            </div>
+          ) : null}
+
+          {error ? <ApiError message={error} /> : null}
+
+          {inlineFeedback ? (
+            <div
+              className={`rounded-xl border px-3 py-2 text-xs transition-all duration-300 ${
+                inlineFeedback.status === "saving"
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : inlineFeedback.status === "saved"
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : inlineFeedback.status === "queued"
+                      ? "border-amber-300 bg-amber-50 text-amber-800"
+                      : "border-red-300 bg-red-50 text-red-700"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span>{inlineFeedback.message}</span>
+                {inlineFeedback.status === "saving" ? (
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-current" />
+                ) : (
+                  <span className="text-[10px] uppercase tracking-wide">sync</span>
+                )}
+              </div>
+            </div>
+          ) : null}
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">Historie</h2>
