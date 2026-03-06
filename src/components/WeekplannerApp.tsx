@@ -3471,9 +3471,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
           {tab === "blocks" && payload ? (
             <div className="space-y-5">
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
                 <select
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 sm:col-span-1"
                   value={blockForm.weekday}
                   onChange={(event) => {
                     const weekday = event.target.value as Weekday;
@@ -3493,7 +3493,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 </select>
                 <input
                   type="date"
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 sm:col-span-1"
                   value={blockForm.dayDate}
                   onChange={(event) => {
                     const dayDate = event.target.value;
@@ -3528,26 +3528,26 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   ))}
                 </select>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 lg:col-span-1"
                   value={blockForm.taskText}
                   placeholder="Taak"
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, taskText: event.target.value }))}
                 />
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 lg:col-span-1"
                   value={blockForm.projectText}
                   placeholder="Project"
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, projectText: event.target.value }))}
                 />
                 <input
                   type="datetime-local"
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 sm:col-span-1"
                   value={blockForm.deadlineAt}
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, deadlineAt: event.target.value }))}
                 />
                 <button
                   type="button"
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="col-span-2 rounded-xl bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1"
                   disabled={!blockFormRangeValid}
                   onClick={() => {
                     if (!blockFormRangeValid) {
@@ -3719,12 +3719,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                               </div>
                             </div>
 
-                            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                            <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-3">
                               <input
                                 key={`${block.id}-${block.updatedAt}-day`}
                                 type="date"
                                 defaultValue={block.dayDate ?? group.dayDate}
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                className="col-span-2 rounded-lg border border-slate-300 px-2 py-1 text-sm lg:col-span-1"
                                 onBlur={(event) =>
                                   void sendMutation(
                                     `/api/hour-blocks/${block.id}`,
@@ -3781,7 +3781,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                               <input
                                 key={`${block.id}-${block.updatedAt}-task`}
                                 defaultValue={block.taskText}
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                className="col-span-2 rounded-lg border border-slate-300 px-2 py-1 text-sm lg:col-span-1"
                                 placeholder="Taak"
                                 onBlur={(event) =>
                                   void sendMutation(
@@ -3796,7 +3796,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                               <input
                                 key={`${block.id}-${block.updatedAt}-project`}
                                 defaultValue={block.projectText}
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                className="col-span-2 rounded-lg border border-slate-300 px-2 py-1 text-sm lg:col-span-1"
                                 placeholder="Project"
                                 onBlur={(event) =>
                                   void sendMutation(
@@ -3812,7 +3812,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                 key={`${block.id}-${block.updatedAt}`}
                                 type="datetime-local"
                                 defaultValue={formatIsoToLocalInput(block.deadlineAt)}
-                                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                                className="col-span-2 rounded-lg border border-slate-300 px-2 py-1 text-sm lg:col-span-1"
                                 onBlur={(event) =>
                                   void updateHourBlockDeadlineWithTaskSync(block, event.target.value)
                                 }

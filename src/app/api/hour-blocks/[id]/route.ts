@@ -3,6 +3,7 @@ import {
   consolidateDuplicateTasksInWeek,
   ensureTaskFromHourBlock,
   syncDeadlineAcrossTaskProject,
+  syncStatusAcrossTaskProject,
   syncTaskLabelAcrossWeek,
 } from "@/lib/api/deadline-sync";
 import { ensureWeekForDate } from "@/lib/api/week-target";
@@ -125,8 +126,20 @@ export async function PATCH(
           taskText: updated.taskText,
           projectText: updated.projectText,
           deadlineAt: updated.deadlineAt,
+          status: updated.status,
         })
       : null;
+
+    if (updated && (payload.status !== undefined || payload.taskText !== undefined)) {
+      await syncStatusAcrossTaskProject({
+        weekId: updated.weekId,
+        sourceType: "hour_block",
+        sourceId: updated.id,
+        weekday: updated.weekday,
+        status: updated.status,
+        taskText: updated.taskText,
+      });
+    }
 
     if (updated) {
       await consolidateDuplicateTasksInWeek(updated.weekId);
@@ -153,13 +166,27 @@ export async function DELETE(
     }
 
     const params = "then" in context.params ? await context.params : context.params;
+    const existing = await db.getHourBlockById(params.id);
+    if (!existing) {
+      return fail("Uurblok niet gevonden.", 404);
+    }
+
     const deleted = await db.deleteHourBlock(params.id, "user");
 
     if (!deleted) {
       return fail("Uurblok niet gevonden.", 404);
     }
 
-    return ok({ deleted: true });
+    await syncStatusAcrossTaskProject({
+      weekId: existing.weekId,
+      sourceType: "hour_block",
+      sourceId: existing.id,
+      weekday: existing.weekday,
+      status: existing.status,
+      taskText: existing.taskText,
+    });
+
+    return ok({ deleted: true, weekId: existing.weekId });
   } catch (error) {
     return parseError(error);
   }

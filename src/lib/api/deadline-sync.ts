@@ -1,4 +1,4 @@
-import type { DayTask, Weekday } from "@/lib/db/types";
+import type { DayTask, TaskStatus, Weekday } from "@/lib/db/types";
 import { normalizeText } from "@/lib/db/helpers";
 import { db } from "@/lib/db/repository";
 
@@ -175,12 +175,104 @@ export async function syncTaskLabelAcrossWeek(params: {
   return { updatedTasks, updatedHourBlocks };
 }
 
+function deriveTaskStatusFromBlocks(statuses: TaskStatus[]): TaskStatus {
+  if (!statuses.length) {
+    return "open";
+  }
+
+  if (statuses.every((status) => status === "klaar")) {
+    return "klaar";
+  }
+
+  if (statuses.some((status) => status === "bezig" || status === "klaar")) {
+    return "bezig";
+  }
+
+  return "open";
+}
+
+export async function syncStatusAcrossTaskProject(params: {
+  weekId: string;
+  sourceType: "task" | "hour_block";
+  sourceId: string;
+  weekday: Weekday;
+  status: TaskStatus;
+  title?: string | null;
+  taskText?: string | null;
+}): Promise<{ updatedTasks: number; updatedHourBlocks: number }> {
+  const statusLabel = params.sourceType === "task" ? params.title : params.taskText;
+  const taskKey = normalizeKey(statusLabel);
+  if (!taskKey) {
+    return { updatedTasks: 0, updatedHourBlocks: 0 };
+  }
+
+  const aggregate = await db.getWeekAggregate(params.weekId);
+  if (!aggregate) {
+    return { updatedTasks: 0, updatedHourBlocks: 0 };
+  }
+
+  const matchingTasks = aggregate.tasks.filter(
+    (task) => task.weekday === params.weekday && normalizeKey(task.title) === taskKey,
+  );
+  const matchingBlocks = aggregate.hourBlocks.filter(
+    (block) => block.weekday === params.weekday && normalizeKey(block.taskText) === taskKey,
+  );
+
+  let updatedTasks = 0;
+  let updatedHourBlocks = 0;
+
+  if (params.sourceType === "task") {
+    for (const task of matchingTasks) {
+      if (task.id === params.sourceId || task.status === params.status) {
+        continue;
+      }
+
+      const updated = await db.updateTask(task.id, { status: params.status }, "system");
+      if (updated) {
+        updatedTasks += 1;
+      }
+    }
+
+    for (const block of matchingBlocks) {
+      if (block.status === params.status) {
+        continue;
+      }
+
+      const updated = await db.updateHourBlock(block.id, { status: params.status }, "system");
+      if (updated) {
+        updatedHourBlocks += 1;
+      }
+    }
+
+    return { updatedTasks, updatedHourBlocks };
+  }
+
+  if (matchingBlocks.length === 0) {
+    return { updatedTasks, updatedHourBlocks };
+  }
+
+  const nextTaskStatus = deriveTaskStatusFromBlocks(matchingBlocks.map((block) => block.status));
+  for (const task of matchingTasks) {
+    if (task.status === nextTaskStatus) {
+      continue;
+    }
+
+    const updated = await db.updateTask(task.id, { status: nextTaskStatus }, "system");
+    if (updated) {
+      updatedTasks += 1;
+    }
+  }
+
+  return { updatedTasks, updatedHourBlocks };
+}
+
 export async function ensureTaskFromHourBlock(params: {
   weekId: string;
   weekday: Weekday;
   taskText: string;
   projectText?: string | null;
   deadlineAt?: string | null;
+  status?: TaskStatus;
 }): Promise<DayTask | null> {
   const title = (params.taskText ?? "").trim();
   if (!title) {
@@ -216,7 +308,7 @@ export async function ensureTaskFromHourBlock(params: {
       info: infoText,
       deadlineAt: params.deadlineAt ?? null,
       priority: "middel",
-      status: "open",
+      status: params.status ?? "open",
       source: "system",
     },
     "system",

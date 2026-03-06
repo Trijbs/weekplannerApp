@@ -1,5 +1,9 @@
 import { ensureAuth } from "@/lib/api/guards";
-import { syncDeadlineAcrossTaskProject, syncTaskLabelAcrossWeek } from "@/lib/api/deadline-sync";
+import {
+  syncDeadlineAcrossTaskProject,
+  syncStatusAcrossTaskProject,
+  syncTaskLabelAcrossWeek,
+} from "@/lib/api/deadline-sync";
 import { ensureWeekForDate } from "@/lib/api/week-target";
 import { ok, parseError, fail } from "@/lib/api/http";
 import { taskPatchSchema } from "@/lib/api/schemas";
@@ -79,6 +83,17 @@ export async function PATCH(
         sourceId: updated.id,
         previousLabel: currentTask?.title ?? null,
         nextLabel: updated.title,
+      });
+    }
+
+    if (patch.status !== undefined) {
+      await syncStatusAcrossTaskProject({
+        weekId: updated.weekId,
+        sourceType: "task",
+        sourceId: updated.id,
+        weekday: updated.weekday,
+        status: updated.status,
+        title: updated.title,
       });
     }
 

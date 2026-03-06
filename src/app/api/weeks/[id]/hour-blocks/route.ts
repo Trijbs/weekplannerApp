@@ -3,6 +3,7 @@ import {
   consolidateDuplicateTasksInWeek,
   ensureTaskFromHourBlock,
   syncDeadlineAcrossTaskProject,
+  syncStatusAcrossTaskProject,
 } from "@/lib/api/deadline-sync";
 import { ensureWeekForDate } from "@/lib/api/week-target";
 import { ok, parseError, fail } from "@/lib/api/http";
@@ -73,6 +74,7 @@ export async function POST(
       taskText: created.taskText,
       projectText: created.projectText,
       deadlineAt: created.deadlineAt,
+      status: created.status,
     });
 
     await syncDeadlineAcrossTaskProject({
@@ -82,6 +84,15 @@ export async function POST(
       deadlineAt: created.deadlineAt,
       taskText: created.taskText,
       projectText: created.projectText,
+    });
+
+    await syncStatusAcrossTaskProject({
+      weekId: targetWeekId,
+      sourceType: "hour_block",
+      sourceId: created.id,
+      weekday: created.weekday,
+      status: created.status,
+      taskText: created.taskText,
     });
 
     await consolidateDuplicateTasksInWeek(targetWeekId);
