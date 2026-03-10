@@ -32,6 +32,43 @@ export async function getQueuedCount(): Promise<number> {
   return db.count(STORE_NAME);
 }
 
+type ApiErrorPayload = {
+  error?: string;
+  details?: {
+    formErrors?: string[];
+    fieldErrors?: Record<string, string[] | undefined>;
+  };
+};
+
+function formatApiErrorMessage(payload: ApiErrorPayload): string {
+  const baseMessage = payload.error?.trim() || "Request mislukt";
+  const details = payload.details;
+  if (!details) {
+    return baseMessage;
+  }
+
+  const detailParts: string[] = [];
+  for (const formError of details.formErrors ?? []) {
+    const normalized = formError.trim();
+    if (normalized) {
+      detailParts.push(normalized);
+    }
+  }
+
+  for (const [field, messages] of Object.entries(details.fieldErrors ?? {})) {
+    const normalizedMessages = (messages ?? []).map((message) => message.trim()).filter(Boolean);
+    if (normalizedMessages.length > 0) {
+      detailParts.push(`${field}: ${normalizedMessages.join(", ")}`);
+    }
+  }
+
+  if (detailParts.length === 0) {
+    return baseMessage;
+  }
+
+  return `${baseMessage}: ${detailParts.join(" | ")}`;
+}
+
 export async function flushMutationQueue(): Promise<{ sent: number; failed: number }> {
   const db = await dbPromise();
   const tx = db.transaction(STORE_NAME, "readwrite");
@@ -106,8 +143,8 @@ export async function mutationFetch<T>(
   }
 
   if (!response.ok) {
-    const payloadError = await response.json().catch(() => ({ error: "Request mislukt" }));
-    throw new Error(payloadError.error ?? "Request mislukt");
+    const payloadError = await response.json().catch(() => ({ error: "Request mislukt" } satisfies ApiErrorPayload));
+    throw new Error(formatApiErrorMessage(payloadError));
   }
 
   const json = (await response.json()) as { data: T };

@@ -55,17 +55,17 @@ export const hourBlockPatchSchema = z.object({
 export const hourEntryCreateSchema = z.object({
   dayDate: z.string().date(),
   weekday: weekdaySchema.optional(),
-  hoursDecimal: z.number().positive().max(24),
-  projectName: z.string().max(180).optional().default(""),
-  noteText: z.string().max(500).optional().default(""),
+  hoursDecimal: z.coerce.number().positive().max(24),
+  projectName: z.string().max(240).optional().default(""),
+  noteText: z.string().max(4000).optional().default(""),
 });
 
 export const hourEntryPatchSchema = z.object({
   dayDate: z.string().date().optional(),
   weekday: weekdaySchema.optional(),
-  hoursDecimal: z.number().positive().max(24).optional(),
-  projectName: z.string().max(180).optional(),
-  noteText: z.string().max(500).optional(),
+  hoursDecimal: z.coerce.number().positive().max(24).optional(),
+  projectName: z.string().max(240).optional(),
+  noteText: z.string().max(4000).optional(),
   expectedUpdatedAt: z.string().min(1).optional(),
 });
 

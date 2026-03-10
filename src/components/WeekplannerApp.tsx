@@ -2350,7 +2350,10 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       } catch (mutationError) {
         const message = mutationError instanceof Error ? mutationError.message : "Actie mislukt.";
         if (options?.localUpdate) {
-          setInlineFeedback({ status: "error", message: "Opslaan mislukt." });
+          setInlineFeedback({
+            status: "error",
+            message: message.trim() || "Opslaan mislukt.",
+          });
         }
         if (message.toLowerCase().includes("conflict")) {
           setError(`${message} Ververs de pagina en probeer opnieuw.`);
