@@ -18,7 +18,11 @@ export const metadata: Metadata = {
   description: "Weekplanning, urenregistratie en automatische notities",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
   },
 };
 
