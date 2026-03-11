@@ -9,6 +9,7 @@ export interface DriveFileMeta {
   id: string;
   name: string;
   modifiedTime: string;
+  mimeType: string;
 }
 
 function envRequired(name: string): string {
@@ -190,10 +191,10 @@ export async function listCandidateFiles(): Promise<DriveFileMeta[]> {
   }
 
   const accessToken = await refreshAccessToken();
-  const query = `'${connection.folderId}' in parents and trashed=false and mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'`;
+  const query = `'${connection.folderId}' in parents and trashed=false and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='text/csv')`;
   const url = new URL("https://www.googleapis.com/drive/v3/files");
   url.searchParams.set("q", query);
-  url.searchParams.set("fields", "files(id,name,modifiedTime)");
+  url.searchParams.set("fields", "files(id,name,modifiedTime,mimeType)");
   url.searchParams.set("orderBy", "modifiedTime desc");
 
   const response = await fetch(url, {
@@ -205,7 +206,13 @@ export async function listCandidateFiles(): Promise<DriveFileMeta[]> {
     throw new Error(`Drive lijst ophalen mislukt: ${JSON.stringify(payload)}`);
   }
 
-  return (payload.files ?? []).filter((file) => /weekplanning/i.test(file.name));
+  return (payload.files ?? []).filter(
+    (file) =>
+      /weekplanning/i.test(file.name) ||
+      /weekplanner/i.test(file.name) ||
+      file.mimeType === "text/csv" ||
+      /\.csv$/i.test(file.name),
+  );
 }
 
 export async function downloadDriveFile(fileId: string): Promise<Buffer> {
