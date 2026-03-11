@@ -18,6 +18,7 @@ type PlannerHeaderProps = {
   hasPreviousWeek: boolean;
   hasNextWeek: boolean;
   exportHref: string | null;
+  notesExportHref: string | null;
   queueCount: number;
   isOnline: boolean;
   daySearchDate: string;
@@ -73,6 +74,7 @@ export function PlannerHeader({
   hasPreviousWeek,
   hasNextWeek,
   exportHref,
+  notesExportHref,
   queueCount,
   isOnline,
   daySearchDate,
@@ -177,6 +179,14 @@ export function PlannerHeader({
               className="flex items-center justify-center rounded-xl bg-amber-300 px-3 py-2 text-sm font-medium text-slate-900"
             >
               Export CSV
+            </a>
+          ) : null}
+          {notesExportHref ? (
+            <a
+              href={notesExportHref}
+              className="flex items-center justify-center rounded-xl bg-emerald-300 px-3 py-2 text-sm font-medium text-slate-900"
+            >
+              Export notities
             </a>
           ) : null}
           <button type="button" className="rounded-xl bg-white/10 px-3 py-2 text-sm" onClick={onLogout}>

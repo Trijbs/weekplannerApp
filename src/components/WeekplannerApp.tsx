@@ -2691,6 +2691,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         hasPreviousWeek={Boolean(previousWeek)}
         hasNextWeek={Boolean(nextWeek)}
         exportHref={payload?.week.id ? `/api/export/csv?weekId=${payload.week.id}` : null}
+        notesExportHref="/api/export/notes"
         queueCount={queueCount}
         isOnline={isOnline}
         daySearchDate={daySearchDate}
