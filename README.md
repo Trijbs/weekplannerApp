@@ -38,8 +38,6 @@ Primary runtime variables:
 
 Legacy fallbacks still supported by the code:
 - `NETLIFY_DATABASE_URL`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
 
 Optional local variables:
 - `LOCAL_DB_PATH`
@@ -50,8 +48,7 @@ Optional local variables:
 The app selects the database implementation in this order:
 1. Neon/Postgres via `DATABASE_URL`
 2. Legacy Neon/Postgres fallback via `NETLIFY_DATABASE_URL`
-3. Supabase via `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
-4. Local JSON fallback for development
+3. Local JSON fallback for development
 
 ## API overview
 - `POST /api/auth/pin/setup`
@@ -126,12 +123,6 @@ npm run db:neon:init
 The script accepts:
 - `DATABASE_URL`
 - legacy fallback `NETLIFY_DATABASE_URL`
-
-## Migration helper
-If you still need the one-time Supabase -> Neon migration script, it accepts:
-- `DATABASE_URL`
-- legacy fallback `NETLIFY_DATABASE_URL`
-- plus `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
 
 ## Tests
 ```bash

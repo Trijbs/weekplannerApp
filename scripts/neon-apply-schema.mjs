@@ -56,7 +56,7 @@ async function main() {
 
   const databaseUrl = process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL;
   const sql = neon(databaseUrl);
-  const schemaFile = path.resolve(process.cwd(), "supabase/migrations/20260226_weekplanner_v1.sql");
+  const schemaFile = path.resolve(process.cwd(), "db/migrations/20260226_weekplanner_v1.sql");
   const raw = await fs.readFile(schemaFile, "utf8");
   const prepared = stripLineComments(raw);
   const statements = splitStatements(prepared);

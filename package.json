@@ -14,7 +14,6 @@
   "dependencies": {
     "@netlify/neon": "^0.1.2",
     "@node-rs/argon2": "^2.0.2",
-    "@supabase/supabase-js": "^2.98.0",
     "@vercel/analytics": "^2.0.1",
     "exceljs": "^4.4.0",
     "idb": "^8.0.3",
