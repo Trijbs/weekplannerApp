@@ -13,7 +13,22 @@ const plexMono = IBM_Plex_Mono({
   variable: "--font-plex-mono",
 });
 
+function resolveMetadataBase(): URL {
+  const configuredUrl = process.env.APP_BASE_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+
+  if (configuredUrl) {
+    try {
+      return new URL(configuredUrl);
+    } catch {
+      // Fall back to localhost when the configured value is not a valid URL.
+    }
+  }
+
+  return new URL("http://localhost:3000");
+}
+
 export const metadata: Metadata = {
+  metadataBase: resolveMetadataBase(),
   title: "Weekplanner",
   description: "Weekplanning, urenregistratie en automatische notities",
   manifest: "/manifest.webmanifest",

@@ -14,7 +14,7 @@ Dutch-first weekplanner PWA with:
 - Neon/Postgres via the `@netlify/neon` SQL client
 - Local JSON fallback for development only when no remote DB env vars are set
 - GitHub Actions scheduled sync for Google Drive
-- Render free web service for hosting
+- Render web service hosting with custom domain support
 
 ## Local run
 ```bash
@@ -73,7 +73,7 @@ The app selects the database implementation in this order:
 - `POST /api/cron/sync-drive` (requires `Authorization: Bearer <CRON_SECRET>`)
 
 ## Render deployment
-This repo includes [render.yaml](./render.yaml) for a free Render web service.
+This repo includes [render.yaml](./render.yaml) for a Render web service.
 
 Render runtime values to set:
 - `DATABASE_URL`
@@ -82,9 +82,9 @@ Render runtime values to set:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_DRIVE_FOLDER_ID`
-- `APP_BASE_URL=https://<your-service>.onrender.com`
-- `NEXT_PUBLIC_APP_URL=https://<your-service>.onrender.com`
-- `GOOGLE_REDIRECT_URI=https://<your-service>.onrender.com/api/integrations/google-drive/callback`
+- `APP_BASE_URL=https://weekplanner.trijbsworld.nl`
+- `NEXT_PUBLIC_APP_URL=https://weekplanner.trijbsworld.nl`
+- `GOOGLE_REDIRECT_URI=https://weekplanner.trijbsworld.nl/api/integrations/google-drive/callback`
 - `NODE_VERSION=20`
 
 Build/start:
@@ -92,11 +92,23 @@ Build/start:
 - Start: `npx next start --hostname 0.0.0.0 --port $PORT`
 - Health check: `/api/auth/pin/status`
 
+### Custom domain on Render
+To move the public app from the default Render hostname to `weekplanner.trijbsworld.nl`:
+
+1. In Render, open the `weekplanner-app` service and add the custom domain `weekplanner.trijbsworld.nl`.
+2. In the DNS zone for `trijbsworld.nl` (currently using Hostnet nameservers), create the DNS record Render asks for.
+3. For a subdomain on Render, this is typically a `CNAME`:
+   - Host/name: `weekplanner`
+   - Value/target: your Render service hostname (for example `your-service-name.onrender.com`)
+4. Remove any conflicting `A`, `AAAA`, or existing `CNAME` record for `weekplanner`.
+5. Back in Render, click Verify and wait for TLS issuance to finish.
+6. After the domain is live, optionally disable the default `onrender.com` subdomain in Render so the app is only reachable on your custom domain.
+
 ## GitHub Actions hourly sync
 This repo includes [hourly-sync.yml](./.github/workflows/hourly-sync.yml).
 
 GitHub repo settings required:
-- Repository variable: `APP_BASE_URL=https://<your-service>.onrender.com`
+- Repository variable: `APP_BASE_URL=https://weekplanner.trijbsworld.nl`
 - Repository secret: `CRON_SECRET=<same secret as Render>`
 
 Behavior:
@@ -106,7 +118,7 @@ Behavior:
 
 ## Google OAuth
 Authorized redirect URI must be set to:
-- `https://<your-service>.onrender.com/api/integrations/google-drive/callback`
+- `https://weekplanner.trijbsworld.nl/api/integrations/google-drive/callback`
 
 After changing the redirect URI, reconnect Google Drive from the production site.
 
@@ -135,5 +147,5 @@ npm run build
 
 ## Notes
 - UI is Dutch and Monday-Friday by default.
-- Render free services can cold-start after inactivity.
+- Render services can cold-start after inactivity, depending on plan.
 - GitHub scheduled workflows on public repos may need re-enabling after long inactivity.
