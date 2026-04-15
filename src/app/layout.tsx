@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -52,6 +53,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="nl" suppressHydrationWarning>
       <body suppressHydrationWarning className={`${spaceGrotesk.variable} ${plexMono.variable} antialiased`}>
         {children}
+        <Analytics />
       </body>
     </html>
   );

@@ -13,8 +13,8 @@ Dutch-first weekplanner PWA with:
 - Next.js 16 + TypeScript + Tailwind
 - Neon/Postgres via the `@netlify/neon` SQL client
 - Local JSON fallback for development only when no remote DB env vars are set
+- Vercel hosting with Vercel Analytics
 - GitHub Actions scheduled sync for Google Drive
-- Render web service hosting with custom domain support
 
 ## Local run
 ```bash
@@ -72,10 +72,8 @@ The app selects the database implementation in this order:
 - `GET /api/export/csv?weekId=...`
 - `POST /api/cron/sync-drive` (requires `Authorization: Bearer <CRON_SECRET>`)
 
-## Render deployment
-This repo includes [render.yaml](./render.yaml) for a Render web service.
-
-Render runtime values to set:
+## Vercel deployment
+Set these Production environment variables in Vercel:
 - `DATABASE_URL`
 - `TOKEN_ENCRYPTION_KEY`
 - `CRON_SECRET`
@@ -85,36 +83,33 @@ Render runtime values to set:
 - `APP_BASE_URL=https://weekplanner.trijbsworld.nl`
 - `NEXT_PUBLIC_APP_URL=https://weekplanner.trijbsworld.nl`
 - `GOOGLE_REDIRECT_URI=https://weekplanner.trijbsworld.nl/api/integrations/google-drive/callback`
-- `NODE_VERSION=20`
+- `NODE_VERSION=20` (optional locally; Vercel manages Node for deployment)
 
-Build/start:
-- Build: `npm ci && npm run build`
-- Start: `npx next start --hostname 0.0.0.0 --port $PORT`
-- Health check: `/api/auth/pin/status`
+Vercel setup:
+1. Import the repository as a Vercel project.
+2. Add `weekplanner.trijbsworld.nl` as the production domain in Vercel.
+3. Point the `weekplanner` DNS record at the Vercel target shown in the project domain settings.
+4. Redeploy after environment variables are in place.
 
-### Custom domain on Render
-To move the public app from the default Render hostname to `weekplanner.trijbsworld.nl`:
+## Vercel Analytics
+This app uses `@vercel/analytics` from the root layout, so page views start being tracked after deployment.
 
-1. In Render, open the `weekplanner-app` service and add the custom domain `weekplanner.trijbsworld.nl`.
-2. In the DNS zone for `trijbsworld.nl` (currently using Hostnet nameservers), create the DNS record Render asks for.
-3. For a subdomain on Render, this is typically a `CNAME`:
-   - Host/name: `weekplanner`
-   - Value/target: your Render service hostname (for example `your-service-name.onrender.com`)
-4. Remove any conflicting `A`, `AAAA`, or existing `CNAME` record for `weekplanner`.
-5. Back in Render, click Verify and wait for TLS issuance to finish.
-6. After the domain is live, optionally disable the default `onrender.com` subdomain in Render so the app is only reachable on your custom domain.
+To see data in Vercel:
+1. Deploy the latest changes.
+2. Visit the production site and navigate between pages.
+3. Check Analytics in the Vercel dashboard after a short delay.
 
 ## GitHub Actions hourly sync
 This repo includes [hourly-sync.yml](./.github/workflows/hourly-sync.yml).
 
 GitHub repo settings required:
 - Repository variable: `APP_BASE_URL=https://weekplanner.trijbsworld.nl`
-- Repository secret: `CRON_SECRET=<same secret as Render>`
+- Repository secret: `CRON_SECRET=<same secret as the Vercel app env>`
 
 Behavior:
 - Runs each hour at minute `17`
 - Supports `workflow_dispatch`
-- Retries the cron endpoint 3 times to tolerate cold starts
+- Retries the cron endpoint 3 times
 
 ## Google OAuth
 Authorized redirect URI must be set to:
@@ -147,5 +142,5 @@ npm run build
 
 ## Notes
 - UI is Dutch and Monday-Friday by default.
-- Render services can cold-start after inactivity, depending on plan.
+- Vercel Hobby keeps hosting simple, but the hourly sync remains in GitHub Actions.
 - GitHub scheduled workflows on public repos may need re-enabling after long inactivity.
