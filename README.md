@@ -72,6 +72,9 @@ GitHub repository settings:
 - Variable: `APP_BASE_URL=https://weekplanner.trijbsworld.nl`
 - Secret: `CRON_SECRET=<same value as the Vercel env>`
 
+Safety fallback:
+- If `APP_BASE_URL` is missing or still points to an old `onrender.com` host, the workflow falls back to `https://weekplanner.trijbsworld.nl`.
+
 Behavior:
 - runs every hour at minute `17`
 - supports manual `workflow_dispatch`

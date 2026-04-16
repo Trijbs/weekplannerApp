@@ -17,13 +17,21 @@ jobs:
       - name: Trigger sync endpoint with retries
         env:
           APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+          FALLBACK_APP_BASE_URL: https://weekplanner.trijbsworld.nl
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
 
-          if [ -z "${APP_BASE_URL:-}" ]; then
-            echo "APP_BASE_URL variable ontbreekt."
-            exit 1
+          base_url="${APP_BASE_URL:-}"
+
+          if [ -z "${base_url}" ]; then
+            echo "APP_BASE_URL variable ontbreekt; fallback domein wordt gebruikt."
+            base_url="${FALLBACK_APP_BASE_URL}"
+          fi
+
+          if [[ "${base_url}" == *".onrender.com"* ]]; then
+            echo "APP_BASE_URL wijst nog naar Render; fallback domein wordt gebruikt."
+            base_url="${FALLBACK_APP_BASE_URL}"
           fi
 
           if [ -z "${CRON_SECRET:-}" ]; then
@@ -31,7 +39,7 @@ jobs:
             exit 1
           fi
 
-          endpoint="${APP_BASE_URL%/}/api/cron/sync-drive"
+          endpoint="${base_url%/}/api/cron/sync-drive"
           attempts=3
           delay_seconds=20
 
