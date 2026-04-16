@@ -45,7 +45,6 @@ Optional variables:
 
 Notes:
 - `DATABASE_URL` is the primary Neon connection string.
-- `NETLIFY_DATABASE_URL` is still accepted by the code as a legacy fallback.
 - When no database env var is present, the app falls back to the local JSON repository for development.
 - UI language preference is stored locally in `weekplanner.language`.
 
@@ -92,7 +91,7 @@ Apply the base Neon schema with:
 npm run db:neon:init
 ```
 
-The script reads `DATABASE_URL` first and accepts `NETLIFY_DATABASE_URL` as a legacy fallback.
+The script reads `DATABASE_URL`.
 
 Migration SQL lives in [db/migrations](/Users/trijbs/TrijbsCoding/Planning schema/weekplanner-app/db/migrations:1).
 

@@ -42,7 +42,7 @@ const weekdayOrder: Record<Weekday, number> = {
 let sqlClient: NeonQuery | null = null;
 
 function resolveDatabaseUrl(): string | null {
-  return process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL ?? null;
+  return process.env.DATABASE_URL ?? null;
 }
 
 export function hasNeonConfig(): boolean {
@@ -52,7 +52,7 @@ export function hasNeonConfig(): boolean {
 function getSql(): NeonQuery {
   const databaseUrl = resolveDatabaseUrl();
   if (!databaseUrl) {
-    throw new Error("Database env var ontbreekt: DATABASE_URL of NETLIFY_DATABASE_URL");
+    throw new Error("Database env var ontbreekt: DATABASE_URL");
   }
 
   if (!sqlClient) {

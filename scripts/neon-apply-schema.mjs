@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { neon } from "@netlify/neon";
 
-const DB_ENV_NAMES = ["DATABASE_URL", "NETLIFY_DATABASE_URL"];
+const DB_ENV_NAMES = ["DATABASE_URL"];
 
 function stripLineComments(sqlText) {
   return sqlText
@@ -44,17 +44,17 @@ async function loadDatabaseUrlFromEnvFile() {
 }
 
 async function main() {
-  const existingUrl = process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL ?? null;
+  const existingUrl = process.env.DATABASE_URL ?? null;
 
   if (!existingUrl) {
     const fromFile = await loadDatabaseUrlFromEnvFile().catch(() => null);
     if (!fromFile) {
-      throw new Error("DATABASE_URL of NETLIFY_DATABASE_URL ontbreekt. Zet die eerst in .env.local of runtime env vars.");
+      throw new Error("DATABASE_URL ontbreekt. Zet die eerst in .env.local of runtime env vars.");
     }
     process.env.DATABASE_URL = fromFile;
   }
 
-  const databaseUrl = process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL;
+  const databaseUrl = process.env.DATABASE_URL;
   const sql = neon(databaseUrl);
   const schemaFile = path.resolve(process.cwd(), "db/migrations/20260226_weekplanner_v1.sql");
   const raw = await fs.readFile(schemaFile, "utf8");
