@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { Weekday } from "@/lib/db/types";
 import type { PlannerSearchResult } from "@/components/weekplanner/types";
+import type { AppLanguage } from "@/lib/i18n";
+import { translateStatic } from "@/lib/i18n";
 
 type PlannerWeekOption = {
   id: string;
@@ -11,6 +13,7 @@ type PlannerWeekOption = {
 };
 
 type PlannerHeaderProps = {
+  language: AppLanguage;
   currentWeekLabel: string;
   currentRangeText: string;
   weekOptions: PlannerWeekOption[];
@@ -38,6 +41,7 @@ type PlannerHeaderProps = {
   onGoToDay: () => void;
   onPlannerSearchQueryChange: (value: string) => void;
   onOpenSearchResult: (result: PlannerSearchResult) => void;
+  onLanguageChange: (language: AppLanguage) => void;
 };
 
 type MobileSearchOverlay = "day" | "planner" | null;
@@ -67,6 +71,7 @@ function CloseIcon({ className = "h-5 w-5" }: { className?: string }) {
 }
 
 export function PlannerHeader({
+  language,
   currentWeekLabel,
   currentRangeText,
   weekOptions,
@@ -94,8 +99,16 @@ export function PlannerHeader({
   onGoToDay,
   onPlannerSearchQueryChange,
   onOpenSearchResult,
+  onLanguageChange,
 }: PlannerHeaderProps) {
   const [mobileOverlay, setMobileOverlay] = useState<MobileSearchOverlay>(null);
+  const t = (text: string) => translateStatic(language, text);
+  const matchLabel = (count: number) => {
+    if (language === "en") {
+      return `${count} match${count === 1 ? "" : "es"}`;
+    }
+    return `${count} match${count === 1 ? "" : "es"}`;
+  };
 
   return (
     <header className="rounded-[2rem] bg-[linear-gradient(135deg,#0f172a,#1d4ed8)] px-4 py-5 text-white shadow-2xl shadow-blue-900/30 sm:px-6 sm:py-8">
@@ -112,7 +125,7 @@ export function PlannerHeader({
                 onClick={onPreviousWeek}
                 disabled={!hasPreviousWeek}
               >
-                Vorige
+                {t("Vorige")}
               </button>
               <select
                 value={currentWeekId ?? ""}
@@ -131,22 +144,38 @@ export function PlannerHeader({
                 onClick={onNextWeek}
                 disabled={!hasNextWeek}
               >
-                Volgende
+                {t("Volgende")}
               </button>
               <button
                 type="button"
                 className="rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs"
                 onClick={onCurrentWeek}
               >
-                Naar huidige week
+                {t("Naar huidige week")}
               </button>
             </div>
           ) : null}
         </div>
 
         <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+          <div className="col-span-2 grid grid-cols-2 gap-2 md:flex">
+            <button
+              type="button"
+              className={`rounded-xl px-3 py-2 text-sm ${language === "nl" ? "bg-white text-slate-900" : "bg-white/10 text-white"}`}
+              onClick={() => onLanguageChange("nl")}
+            >
+              NL
+            </button>
+            <button
+              type="button"
+              className={`rounded-xl px-3 py-2 text-sm ${language === "en" ? "bg-white text-slate-900" : "bg-white/10 text-white"}`}
+              onClick={() => onLanguageChange("en")}
+            >
+              EN
+            </button>
+          </div>
           <label className="flex cursor-pointer items-center justify-center rounded-xl bg-white/10 px-3 py-2 text-center text-sm backdrop-blur hover:bg-white/20">
-            Excel import
+            {t("Excel import")}
             <input
               type="file"
               accept=".xlsx"
@@ -164,21 +193,21 @@ export function PlannerHeader({
             className="rounded-xl bg-white/10 px-3 py-2 text-sm"
             onClick={onRunDriveSync}
           >
-            Sync Drive
+            {t("Sync Drive")}
           </button>
           <button
             type="button"
             className="rounded-xl bg-white/10 px-3 py-2 text-sm"
             onClick={onConnectDrive}
           >
-            Koppel Drive
+            {t("Koppel Drive")}
           </button>
           {exportHref ? (
             <a
               href={exportHref}
               className="flex items-center justify-center rounded-xl bg-amber-300 px-3 py-2 text-sm font-medium text-slate-900"
             >
-              Export CSV
+              {t("Export CSV")}
             </a>
           ) : null}
           {notesExportHref ? (
@@ -186,19 +215,19 @@ export function PlannerHeader({
               href={notesExportHref}
               className="flex items-center justify-center rounded-xl bg-emerald-300 px-3 py-2 text-sm font-medium text-slate-900"
             >
-              Export notities
+              {t("Export notities")}
             </a>
           ) : null}
           <button type="button" className="rounded-xl bg-white/10 px-3 py-2 text-sm" onClick={onLogout}>
-            Uitloggen
+            {t("Uitloggen")}
           </button>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2 text-xs text-blue-100">
-        <span className="rounded-full border border-white/30 px-2 py-1">{isOnline ? "Online" : "Offline"}</span>
-        <span className="rounded-full border border-white/30 px-2 py-1">Wachtrij: {queueCount}</span>
-        <span className="rounded-full border border-white/30 px-2 py-1">Tijdzone: Europe/Amsterdam</span>
+        <span className="rounded-full border border-white/30 px-2 py-1">{isOnline ? t("Online") : t("Offline")}</span>
+        <span className="rounded-full border border-white/30 px-2 py-1">{t("Wachtrij")}: {queueCount}</span>
+        <span className="rounded-full border border-white/30 px-2 py-1">{t("Tijdzone")}: Europe/Amsterdam</span>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2 md:hidden">
@@ -210,9 +239,9 @@ export function PlannerHeader({
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-900">
             <CalendarIcon />
           </span>
-          <span className="min-w-0">
-            <span className="block text-sm font-medium text-white">Zoek dag</span>
-            <span className="block text-xs text-blue-100">Open overlay</span>
+            <span className="min-w-0">
+            <span className="block text-sm font-medium text-white">{t("Zoek dag")}</span>
+            <span className="block text-xs text-blue-100">{t("Open overlay")}</span>
           </span>
         </button>
         <button
@@ -224,17 +253,19 @@ export function PlannerHeader({
             <SearchIcon />
           </span>
           <span className="min-w-0">
-            <span className="block text-sm font-medium text-white">Zoek taak</span>
-            <span className="block text-xs text-blue-100">Project of taak</span>
+            <span className="block text-sm font-medium text-white">{t("Zoek taak")}</span>
+            <span className="block text-xs text-blue-100">{t("Project")} / {t("Taak")}</span>
           </span>
         </button>
       </div>
 
       <div className="mt-4 hidden flex-col gap-2 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur md:flex md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Zoek Dag</p>
+          <p className="text-xs uppercase tracking-[0.15em] text-blue-100">{t("Zoek Dag")}</p>
           <p className="mt-1 text-sm text-blue-50">
-            Kies een datum en open direct het dagdetail om oude of aankomende informatie terug te vinden.
+            {language === "en"
+              ? "Choose a date and open the day detail immediately to find past or upcoming information."
+              : "Kies een datum en open direct het dagdetail om oude of aankomende informatie terug te vinden."}
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -249,7 +280,7 @@ export function PlannerHeader({
             className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900"
             onClick={onGoToDay}
           >
-            Ga naar dag
+            {t("Ga naar dag")}
           </button>
         </div>
       </div>
@@ -257,15 +288,15 @@ export function PlannerHeader({
       <div className="mt-3 hidden rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur md:block">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.15em] text-blue-100">Zoek Project Of Taak</p>
+            <p className="text-xs uppercase tracking-[0.15em] text-blue-100">{t("Zoek Project Of Taak")}</p>
             <p className="mt-1 text-sm text-blue-50">
-              Zoek op projectnaam, taaknaam of reflectietekst en open direct de juiste dag.
+              {t("Zoek op projectnaam, taaknaam of reflectietekst en open direct de juiste dag.")}
             </p>
           </div>
           <input
             value={plannerSearchQuery}
             className="w-full rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm text-white md:max-w-md"
-            placeholder="Bijv. portfolio, reflectie, logo..."
+            placeholder={t("Bijv. portfolio, reflectie, logo...")}
             onChange={(event) => onPlannerSearchQueryChange(event.target.value)}
           />
         </div>
@@ -281,7 +312,7 @@ export function PlannerHeader({
                         {weekdayLabels[result.weekday]} ({formatDayDateLabel(result.dayDate)})
                       </p>
                       <p className="text-xs text-blue-100">
-                        {result.weekLabel} • {result.matchCount} match{result.matchCount === 1 ? "" : "es"}
+                        {result.weekLabel} • {matchLabel(result.matchCount)}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {result.previews.map((preview) => (
@@ -299,14 +330,14 @@ export function PlannerHeader({
                       className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900"
                       onClick={() => onOpenSearchResult(result)}
                     >
-                      Open dag
+                      {t("Open dag")}
                     </button>
                   </div>
                 </div>
               ))
             ) : (
               <div className="rounded-xl border border-white/15 bg-slate-950/20 px-3 py-3 text-sm text-blue-50">
-                Geen resultaten gevonden.
+                {t("Geen resultaten gevonden.")}
               </div>
             )}
           </div>
@@ -322,17 +353,17 @@ export function PlannerHeader({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-blue-100">
-                  {mobileOverlay === "day" ? "Zoek dag" : "Zoek project of taak"}
+                  {mobileOverlay === "day" ? t("Zoek dag") : t("Zoek project of taak")}
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">
-                  {mobileOverlay === "day" ? "Ga direct naar een dag" : "Open snel de juiste dag"}
+                  {mobileOverlay === "day" ? t("Ga direct naar een dag") : t("Open snel de juiste dag")}
                 </h2>
               </div>
               <button
                 type="button"
                 className="rounded-2xl border border-white/20 bg-white/10 p-2 text-white"
                 onClick={() => setMobileOverlay(null)}
-                aria-label="Sluiten"
+                aria-label={t("Sluiten")}
               >
                 <CloseIcon />
               </button>
@@ -341,7 +372,9 @@ export function PlannerHeader({
             {mobileOverlay === "day" ? (
               <div className="mt-4 space-y-3">
                 <p className="text-sm text-blue-50">
-                  Kies een datum en open direct het dagdetail om oude of aankomende informatie terug te vinden.
+                  {language === "en"
+                    ? "Choose a date and open the day detail immediately to find past or upcoming information."
+                    : "Kies een datum en open direct het dagdetail om oude of aankomende informatie terug te vinden."}
                 </p>
                 <input
                   type="date"
@@ -357,18 +390,18 @@ export function PlannerHeader({
                     setMobileOverlay(null);
                   }}
                 >
-                  Ga naar dag
+                  {t("Ga naar dag")}
                 </button>
               </div>
             ) : (
               <div className="mt-4 space-y-3">
                 <p className="text-sm text-blue-50">
-                  Zoek op projectnaam, taaknaam of reflectietekst en open direct de juiste dag.
+                  {t("Zoek op projectnaam, taaknaam of reflectietekst en open direct de juiste dag.")}
                 </p>
                 <input
                   value={plannerSearchQuery}
                   className="w-full rounded-2xl border border-white/25 bg-white/10 px-3 py-3 text-sm text-white placeholder:text-blue-100/60"
-                  placeholder="Bijv. portfolio, reflectie, logo..."
+                  placeholder={t("Bijv. portfolio, reflectie, logo...")}
                   onChange={(event) => onPlannerSearchQueryChange(event.target.value)}
                 />
 
@@ -383,7 +416,7 @@ export function PlannerHeader({
                                 {weekdayLabels[result.weekday]} ({formatDayDateLabel(result.dayDate)})
                               </p>
                               <p className="text-xs text-blue-100">
-                                {result.weekLabel} • {result.matchCount} match{result.matchCount === 1 ? "" : "es"}
+                                {result.weekLabel} • {matchLabel(result.matchCount)}
                               </p>
                               <div className="mt-2 flex flex-wrap gap-2">
                                 {result.previews.map((preview) => (
@@ -404,20 +437,20 @@ export function PlannerHeader({
                                 setMobileOverlay(null);
                               }}
                             >
-                              Open dag
+                              {t("Open dag")}
                             </button>
                           </div>
                         </div>
                       ))
                     ) : (
                       <div className="rounded-2xl border border-white/15 bg-slate-950/20 px-3 py-3 text-sm text-blue-50">
-                        Geen resultaten gevonden.
+                        {t("Geen resultaten gevonden.")}
                       </div>
                     )}
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-white/15 bg-slate-950/20 px-3 py-3 text-sm text-blue-50">
-                    Typ minimaal 2 letters om te zoeken.
+                    {t("Typ minimaal 2 letters om te zoeken.")}
                   </div>
                 )}
               </div>

@@ -1,8 +1,11 @@
 import { formatIsoToLocalInput } from "@/lib/db/helpers";
 import type { DayTask, HourEntry, Weekday } from "@/lib/db/types";
 import type { DetailTaskFormState, HourBlockDisplayGroup } from "@/components/weekplanner/types";
+import type { AppLanguage } from "@/lib/i18n";
+import { translateStatic } from "@/lib/i18n";
 
 type DayDetailModalProps = {
+  language: AppLanguage;
   weekdayLabels: Record<Weekday, string>;
   detailDay: Weekday;
   detailDayIso: string | null;
@@ -36,6 +39,7 @@ type DayDetailModalProps = {
 };
 
 export function DayDetailModal({
+  language,
   weekdayLabels,
   detailDay,
   detailDayIso,
@@ -67,6 +71,12 @@ export function DayDetailModal({
   onTaskPatch,
   onTaskDelete,
 }: DayDetailModalProps) {
+  const t = (text: string) => translateStatic(language, text);
+  const summary =
+    language === "en"
+      ? `Tasks ${detailDoneCount}/${detailTasks.length} done • Time blocks ${detailHourBlocksCount} • Hours ${detailHoursTotal}h`
+      : `Taken ${detailDoneCount}/${detailTasks.length} klaar • Uurblokken ${detailHourBlocksCount} • Uren ${detailHoursTotal}u`;
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/55 p-0 sm:p-6" onClick={onClose}>
       <div
@@ -75,7 +85,7 @@ export function DayDetailModal({
       >
         <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:flex-row sm:items-start sm:justify-between sm:px-6">
           <div>
-            <p className="text-xs uppercase tracking-[0.15em] text-slate-500">Dag detail</p>
+            <p className="text-xs uppercase tracking-[0.15em] text-slate-500">{t("Dag detail")}</p>
             <h2 className="text-xl font-semibold text-slate-900 sm:text-2xl">
               {weekdayLabels[detailDay]}
               {detailDayIso ? (
@@ -84,11 +94,9 @@ export function DayDetailModal({
                 </span>
               ) : null}
             </h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Taken {detailDoneCount}/{detailTasks.length} klaar • Uurblokken {detailHourBlocksCount} • Uren {detailHoursTotal}u
-            </p>
+            <p className="mt-1 text-sm text-slate-600">{summary}</p>
             <p className="mt-1 text-xs text-slate-500">
-              {weekLabel} • Live: {liveNowAmsterdam}
+              {weekLabel} • {t("Realtime")}: {liveNowAmsterdam}
             </p>
           </div>
           <button
@@ -96,17 +104,17 @@ export function DayDetailModal({
             className="self-start rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 sm:self-auto"
             onClick={onClose}
           >
-            Sluiten
+            {t("Sluiten")}
           </button>
         </div>
 
         <div className="grid gap-3 p-3 lg:auto-rows-fr lg:grid-cols-3 lg:gap-4 lg:overflow-auto lg:p-6">
           <section className="flex min-h-0 flex-col rounded-xl border border-slate-200 p-3 lg:min-h-[24rem]">
-            <h3 className="text-sm font-semibold text-slate-900">Taken</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{t("Taken")}</h3>
             <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                  Snelle taak voor {weekdayLabels[detailDay]}
+                  {t("Snelle taak voor")} {weekdayLabels[detailDay]}
                   {detailDayIso ? ` (${detailDayLabel ?? formatDayDateLabel(detailDayIso)})` : ""}
                 </p>
                 <button
@@ -114,7 +122,7 @@ export function DayDetailModal({
                   className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-white"
                   onClick={onToggleComposer}
                 >
-                  {detailTaskComposerExpanded ? "Minder opties" : "Meer opties"}
+                  {detailTaskComposerExpanded ? t("Minder opties") : t("Meer opties")}
                 </button>
               </div>
 
@@ -122,7 +130,7 @@ export function DayDetailModal({
                 <input
                   value={detailTaskForm.title}
                   className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                  placeholder="Nieuwe taak"
+                  placeholder={t("Nieuwe taak")}
                   onChange={(event) => onDetailTaskFormChange({ title: event.target.value })}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") {
@@ -136,7 +144,7 @@ export function DayDetailModal({
                   className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                   onChange={(event) => onDetailTaskFormChange({ scheduleHint: event.target.value })}
                 >
-                  <option value="">Beste uren</option>
+                  <option value="">{t("Beste uren")}</option>
                   {detailScheduleOptions.map((slot) => (
                     <option key={`detail-slot-${slot}`} value={slot}>
                       {slot}
@@ -155,7 +163,7 @@ export function DayDetailModal({
                   onClick={() => void onAddTask()}
                   disabled={!detailTaskForm.title.trim()}
                 >
-                  Toevoegen
+                  {t("Toevoegen")}
                 </button>
               </div>
 
@@ -164,7 +172,7 @@ export function DayDetailModal({
                   <input
                     value={detailTaskForm.info}
                     className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                    placeholder="Info of project"
+                    placeholder={t("Info of project")}
                     onChange={(event) => onDetailTaskFormChange({ info: event.target.value })}
                   />
                   <select
@@ -174,16 +182,16 @@ export function DayDetailModal({
                       onDetailTaskFormChange({ priority: event.target.value as DetailTaskFormState["priority"] })
                     }
                   >
-                    <option value="hoog">Hoog</option>
-                    <option value="middel">Middel</option>
-                    <option value="laag">Laag</option>
+                    <option value="hoog">{t("Hoog")}</option>
+                    <option value="middel">{t("Middel")}</option>
+                    <option value="laag">{t("Laag")}</option>
                   </select>
                   <select
                     value={detailTaskDeadlineTimeValue}
                     className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                     onChange={(event) => onApplyDetailTaskDeadlineTime(event.target.value)}
                   >
-                    <option value="">Sneltijd deadline</option>
+                    <option value="">{t("Sneltijd deadline")}</option>
                     {timeOptions.map((time) => (
                       <option key={`detail-task-deadline-${time}`} value={time}>
                         {time}
@@ -210,19 +218,19 @@ export function DayDetailModal({
                                 status: event.target.checked ? "klaar" : "open",
                                 expectedUpdatedAt: task.updatedAt,
                               },
-                              "Taak status bijgewerkt.",
+                              t("Taak status bijgewerkt."),
                             )
                           }
                           className="h-4 w-4"
                         />
-                        Afvinken
+                        {language === "en" ? "Mark done" : "Afvinken"}
                       </label>
                       <button
                         type="button"
                         className="text-xs text-red-600"
                         onClick={() => void onTaskDelete(task.id)}
                       >
-                        Verwijder
+                        {t("Verwijder")}
                       </button>
                     </div>
                     <div className="mt-2 space-y-2">
@@ -236,7 +244,7 @@ export function DayDetailModal({
                           void onTaskPatch(
                             task.id,
                             { title: event.target.value, expectedUpdatedAt: task.updatedAt },
-                            "Taak bijgewerkt.",
+                            t("Taak bijgewerkt."),
                           )
                         }
                       />
@@ -244,12 +252,12 @@ export function DayDetailModal({
                         key={`${task.id}-${task.updatedAt}-detail-info`}
                         defaultValue={task.info}
                         className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700"
-                        placeholder="Info"
+                        placeholder={t("Info")}
                         onBlur={(event) =>
                           void onTaskPatch(
                             task.id,
                             { info: event.target.value, expectedUpdatedAt: task.updatedAt },
-                            "Info bijgewerkt.",
+                            t("Info bijgewerkt."),
                           )
                         }
                       />
@@ -262,13 +270,13 @@ export function DayDetailModal({
                             void onTaskPatch(
                               task.id,
                               { priority: event.target.value, expectedUpdatedAt: task.updatedAt },
-                              "Prioriteit bijgewerkt.",
+                              t("Prioriteit bijgewerkt."),
                             )
                           }
                         >
-                          <option value="hoog">Hoog</option>
-                          <option value="middel">Middel</option>
-                          <option value="laag">Laag</option>
+                          <option value="hoog">{t("Hoog")}</option>
+                          <option value="middel">{t("Middel")}</option>
+                          <option value="laag">{t("Laag")}</option>
                         </select>
                         <input
                           key={`${task.id}-${task.updatedAt}-detail-deadline`}
@@ -284,7 +292,7 @@ export function DayDetailModal({
                                   : null,
                                 expectedUpdatedAt: task.updatedAt,
                               },
-                              "Deadline bijgewerkt.",
+                              t("Deadline bijgewerkt."),
                             )
                           }
                         />
@@ -293,14 +301,14 @@ export function DayDetailModal({
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Geen taken voor deze dag.</p>
+                <p className="text-sm text-slate-500">{t("Geen taken voor deze dag.")}</p>
               )}
             </div>
           </section>
 
           <section className="flex min-h-0 flex-col rounded-xl border border-slate-200 p-3 lg:min-h-[24rem]">
-            <h3 className="text-sm font-semibold text-slate-900">Uurblokken</h3>
-            {detailDayIsToday ? <p className="mt-1 text-xs text-blue-700">Realtime: {liveNowAmsterdam}</p> : null}
+            <h3 className="text-sm font-semibold text-slate-900">{t("Uurblokken")}</h3>
+            {detailDayIsToday ? <p className="mt-1 text-xs text-blue-700">{t("Realtime")}: {liveNowAmsterdam}</p> : null}
             <div className="mt-2 flex-1 space-y-2 lg:overflow-y-auto lg:pr-1">
               {detailGroupedHourBlocks.length ? (
                 detailGroupedHourBlocks.map((blockGroup) => {
@@ -322,38 +330,41 @@ export function DayDetailModal({
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-slate-600">
-                        {formatHourAmount(blockGroup.totalMinutes / 60)} • {blockGroup.blocks.length} blok
-                        {blockGroup.blocks.length === 1 ? "" : "ken"}
+                        {formatHourAmount(blockGroup.totalMinutes / 60)} • {blockGroup.blocks.length} {language === "en"
+                          ? `block${blockGroup.blocks.length === 1 ? "" : "s"}`
+                          : `blok${blockGroup.blocks.length === 1 ? "" : "ken"}`}
                         {blockGroup.taskLabels.length > 1 ? ` • ${blockGroup.taskLabels.join(", ")}` : ""}
                       </p>
                       {isActiveNow ? (
                         <span className="mt-2 inline-flex rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-                          Nu actief
+                          {t("Nu actief")}
                         </span>
                       ) : null}
                     </article>
                   );
                 })
               ) : (
-                <p className="text-sm text-slate-500">Geen uurblokken voor deze dag.</p>
+                <p className="text-sm text-slate-500">{t("Geen uurblokken voor deze dag.")}</p>
               )}
             </div>
           </section>
 
           <section className="flex min-h-0 flex-col rounded-xl border border-slate-200 p-3 lg:min-h-[24rem]">
-            <h3 className="text-sm font-semibold text-slate-900">Urenregistratie</h3>
+            <h3 className="text-sm font-semibold text-slate-900">{t("Urenregistratie")}</h3>
             <div className="mt-2 flex-1 space-y-2 lg:overflow-y-auto lg:pr-1">
               {detailHourEntries.length ? (
                 detailHourEntries.map((entry) => (
                   <article key={entry.id} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
                     <p className="text-sm font-medium text-slate-800">{entry.hoursDecimal}u</p>
                     <p className="text-sm text-slate-600">
-                      {entry.projectName || "Onbekend project"} • {entry.noteText || "Geen notitie"}
+                      {entry.projectName || t("Onbekend project")} • {entry.noteText || t("Geen notitie")}
                     </p>
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Geen urenregistratie voor deze dag.</p>
+                <p className="text-sm text-slate-500">
+                  {language === "en" ? "No time entries for this day." : "Geen urenregistratie voor deze dag."}
+                </p>
               )}
             </div>
           </section>

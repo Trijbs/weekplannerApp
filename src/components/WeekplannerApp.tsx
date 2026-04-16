@@ -16,6 +16,14 @@ import { WEEKDAYS } from "@/lib/db/types";
 import { formatIsoToLocalInput } from "@/lib/db/helpers";
 import { DayDetailModal } from "@/components/weekplanner/DayDetailModal";
 import { PlannerHeader } from "@/components/weekplanner/PlannerHeader";
+import {
+  getLocale,
+  getMonthLabels,
+  getWeekdayLabels,
+  translateStatus,
+  translateStatic,
+  type AppLanguage,
+} from "@/lib/i18n";
 import type {
   CompletedTaskLogItem,
   DetailTaskFormState,
@@ -76,29 +84,6 @@ type InlineFeedbackState = {
   message: string;
 };
 
-const weekdayLabels: Record<Weekday, string> = {
-  maandag: "Maandag",
-  dinsdag: "Dinsdag",
-  woensdag: "Woensdag",
-  donderdag: "Donderdag",
-  vrijdag: "Vrijdag",
-};
-
-const monthLabels = [
-  "jan",
-  "feb",
-  "mrt",
-  "apr",
-  "mei",
-  "jun",
-  "jul",
-  "aug",
-  "sep",
-  "okt",
-  "nov",
-  "dec",
-];
-
 const TIME_OPTIONS = Array.from({ length: 96 }, (_, index) => {
   const hours = String(Math.floor(index / 4)).padStart(2, "0");
   const minutes = String((index % 4) * 15).padStart(2, "0");
@@ -148,7 +133,7 @@ function isoWeekStartEnd(weekNumber: number, year: number): { startDate: string;
   };
 }
 
-function formatDayDateLabel(isoDate: string): string {
+function formatDayDateLabel(isoDate: string, monthLabels: string[]): string {
   const [year, month, day] = isoDate.split("-");
   if (!year || !month || !day) {
     return isoDate;
@@ -159,7 +144,7 @@ function formatDayDateLabel(isoDate: string): string {
   return `${Number(day)} ${monthLabel}`;
 }
 
-function formatDateTimeAmsterdam(value: string | null): string {
+function formatDateTimeAmsterdam(value: string | null, locale: string): string {
   if (!value) {
     return "-";
   }
@@ -169,7 +154,7 @@ function formatDateTimeAmsterdam(value: string | null): string {
     return "-";
   }
 
-  return parsed.toLocaleString("nl-NL", {
+  return parsed.toLocaleString(locale, {
     timeZone: "Europe/Amsterdam",
     year: "numeric",
     month: "2-digit",
@@ -180,7 +165,7 @@ function formatDateTimeAmsterdam(value: string | null): string {
   });
 }
 
-function formatIsoDateAmsterdam(isoDate: string | null): string {
+function formatIsoDateAmsterdam(isoDate: string | null, locale: string): string {
   if (!isoDate) {
     return "-";
   }
@@ -190,7 +175,7 @@ function formatIsoDateAmsterdam(isoDate: string | null): string {
     return isoDate;
   }
 
-  return parsed.toLocaleDateString("nl-NL", {
+  return parsed.toLocaleDateString(locale, {
     timeZone: "Europe/Amsterdam",
     year: "numeric",
     month: "2-digit",
@@ -295,8 +280,8 @@ function todayIsoForTimezone(timeZone: string): string {
   return `${year}-${month}-${day}`;
 }
 
-function nowLabelForTimezone(timeZone: string): string {
-  return new Intl.DateTimeFormat("nl-NL", {
+function nowLabelForTimezone(timeZone: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     weekday: "long",
     day: "2-digit",
@@ -832,6 +817,7 @@ function ApiError({ message }: { message: string }) {
 
 export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps) {
   const initOnceRef = useRef(false);
+  const [language, setLanguage] = useState<AppLanguage>("nl");
   const [tab, setTab] = useState<Tab>("planner");
   const [pinStatus, setPinStatus] = useState<PinStatus | null>(initialPinStatus);
   const [pin, setPin] = useState("");
@@ -905,6 +891,22 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     };
   });
   const [inlineFeedback, setInlineFeedback] = useState<InlineFeedbackState | null>(null);
+  const weekdayLabels = useMemo(() => getWeekdayLabels(language), [language]);
+  const monthLabels = useMemo(() => getMonthLabels(language), [language]);
+  const locale = useMemo(() => getLocale(language), [language]);
+  const t = useCallback((text: string) => translateStatic(language, text), [language]);
+  const formatDayDateLabelForLanguage = useCallback(
+    (isoDate: string) => formatDayDateLabel(isoDate, monthLabels),
+    [monthLabels],
+  );
+  const formatDateTimeForLanguage = useCallback(
+    (value: string | null) => formatDateTimeAmsterdam(value, locale),
+    [locale],
+  );
+  const formatIsoDateForLanguage = useCallback(
+    (value: string | null) => formatIsoDateAmsterdam(value, locale),
+    [locale],
+  );
 
   const refreshQueueCount = useCallback(async () => {
     const count = await getQueuedCount();
@@ -1054,11 +1056,11 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   }, []);
 
   useEffect(() => {
-    const updateNow = () => setLiveNowAmsterdam(nowLabelForTimezone("Europe/Amsterdam"));
+    const updateNow = () => setLiveNowAmsterdam(nowLabelForTimezone("Europe/Amsterdam", locale));
     updateNow();
     const timer = window.setInterval(updateNow, 1_000);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!inlineFeedback || inlineFeedback.status === "saving") {
@@ -1071,6 +1073,29 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     );
     return () => window.clearTimeout(timeout);
   }, [inlineFeedback]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const savedLanguage = window.localStorage.getItem("weekplanner.language");
+      if (savedLanguage === "nl" || savedLanguage === "en") {
+        setLanguage(savedLanguage);
+      }
+    } catch {
+      // Ignore unavailable local storage.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem("weekplanner.language", language);
+  }, [language]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1115,19 +1140,23 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     }
 
     if (driveState === "connected") {
-      setNotice("Google Drive is gekoppeld.");
+      setNotice(t("Google Drive is gekoppeld."));
     } else if (driveState.startsWith("error_google_")) {
       const reason = driveState.replace("error_google_", "");
-      setError(`Drive koppeling mislukt (${reason}). Controleer redirect URI in Google Cloud Console.`);
+      setError(
+        language === "en"
+          ? `Drive connection failed (${reason}). Check the redirect URI in Google Cloud Console.`
+          : `Drive koppeling mislukt (${reason}). Controleer redirect URI in Google Cloud Console.`,
+      );
     } else {
-      setError("Drive koppeling mislukt. Controleer OAuth redirect URI en folder-id.");
+      setError(t("Drive koppeling mislukt. Controleer OAuth redirect URI en folder-id."));
     }
 
     params.delete("drive");
     const nextSearch = params.toString();
     const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
     window.history.replaceState({}, "", nextUrl);
-  }, []);
+  }, [language, t]);
 
   const groupedTasks = useMemo(() => {
     if (!payload) {
@@ -1170,13 +1199,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const weekdayDateMap = useMemo(
     () =>
       ({
-        maandag: weekdayIsoMap.maandag ? formatDayDateLabel(weekdayIsoMap.maandag) : "",
-        dinsdag: weekdayIsoMap.dinsdag ? formatDayDateLabel(weekdayIsoMap.dinsdag) : "",
-        woensdag: weekdayIsoMap.woensdag ? formatDayDateLabel(weekdayIsoMap.woensdag) : "",
-        donderdag: weekdayIsoMap.donderdag ? formatDayDateLabel(weekdayIsoMap.donderdag) : "",
-        vrijdag: weekdayIsoMap.vrijdag ? formatDayDateLabel(weekdayIsoMap.vrijdag) : "",
+        maandag: weekdayIsoMap.maandag ? formatDayDateLabelForLanguage(weekdayIsoMap.maandag) : "",
+        dinsdag: weekdayIsoMap.dinsdag ? formatDayDateLabelForLanguage(weekdayIsoMap.dinsdag) : "",
+        woensdag: weekdayIsoMap.woensdag ? formatDayDateLabelForLanguage(weekdayIsoMap.woensdag) : "",
+        donderdag: weekdayIsoMap.donderdag ? formatDayDateLabelForLanguage(weekdayIsoMap.donderdag) : "",
+        vrijdag: weekdayIsoMap.vrijdag ? formatDayDateLabelForLanguage(weekdayIsoMap.vrijdag) : "",
       }) satisfies Record<Weekday, string>,
-    [weekdayIsoMap],
+    [formatDayDateLabelForLanguage, weekdayIsoMap],
   );
 
   const orderedWeekdays = useMemo(() => {
@@ -2086,13 +2115,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const goToPlannerDate = useCallback(
     async (dateIso: string) => {
       if (!dateIso) {
-        setError("Kies eerst een datum om naartoe te gaan.");
+        setError(language === "en" ? "Choose a date first." : "Kies eerst een datum om naartoe te gaan.");
         return;
       }
 
       const weekday = weekdayFromIsoDate(dateIso);
       if (!weekday) {
-        setError("Kies een werkdag tussen maandag en vrijdag.");
+        setError(language === "en" ? "Choose a weekday between Monday and Friday." : "Kies een werkdag tussen maandag en vrijdag.");
         return;
       }
 
@@ -2102,7 +2131,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       });
 
       if (!targetWeek) {
-        setError("Voor deze datum is nog geen week of planning beschikbaar.");
+        setError(language === "en" ? "No week or planning is available for this date yet." : "Voor deze datum is nog geen week of planning beschikbaar.");
         return;
       }
 
@@ -2115,9 +2144,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       }
 
       openPlannerDayDetail(weekday, dateIso, targetWeek.id);
-      setNotice(`Dag geopend: ${formatIsoDateAmsterdam(dateIso)}.`);
+      setNotice(`${language === "en" ? "Opened day" : "Dag geopend"}: ${formatIsoDateForLanguage(dateIso)}.`);
     },
-    [loadData, openPlannerDayDetail, orderedWeeksByDate, payload?.week.id],
+    [formatIsoDateForLanguage, language, loadData, openPlannerDayDetail, orderedWeeksByDate, payload?.week.id],
   );
 
   const closePlannerDayDetail = useCallback(() => {
@@ -2186,7 +2215,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
       const json = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(json.error ?? "PIN-verzoek mislukt");
+        throw new Error(json.error ?? (language === "en" ? "PIN request failed" : "PIN-verzoek mislukt"));
       }
 
       setPin("");
@@ -2195,9 +2224,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       if (status.authenticated) {
         await loadData(activeWeekId);
       }
-      setNotice(pinStatus.configured ? "Ingelogd." : "PIN ingesteld.");
+      setNotice(language === "en" ? (pinStatus.configured ? "Signed in." : "PIN saved.") : (pinStatus.configured ? "Ingelogd." : "PIN ingesteld."));
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "PIN-fout");
+      setError(submitError instanceof Error ? submitError.message : (language === "en" ? "PIN error" : "PIN-fout"));
     } finally {
       setPinSubmitting(false);
     }
@@ -2317,15 +2346,15 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       try {
         setError(null);
         if (options?.localUpdate) {
-          setInlineFeedback({ status: "saving", message: "Opslaan..." });
+          setInlineFeedback({ status: "saving", message: language === "en" ? "Saving..." : "Opslaan..." });
         }
         const result = await mutationFetch<MutationResultData>(url, { method, body });
         await refreshQueueCount();
 
         if (result.queued) {
-          setNotice("Offline: actie in wachtrij gezet.");
+          setNotice(t("Offline: actie in wachtrij gezet."));
           if (options?.localUpdate) {
-            setInlineFeedback({ status: "queued", message: "Offline: in wachtrij gezet." });
+            setInlineFeedback({ status: "queued", message: t("Offline: in wachtrij gezet.") });
           }
           return { ok: true, queued: true };
         }
@@ -2335,7 +2364,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           setNotice(successNotice);
         }
         if (options?.localUpdate) {
-          setInlineFeedback({ status: "saved", message: "Opgeslagen." });
+          setInlineFeedback({ status: "saved", message: language === "en" ? "Saved." : "Opgeslagen." });
         }
         const serverWeekId = typeof result.data?.weekId === "string" ? result.data.weekId : null;
         const shouldKeepCurrentWeek = options?.keepCurrentWeek ?? false;
@@ -2348,22 +2377,22 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         await loadData(targetWeekId ?? null);
         return { ok: true, queued: false, data: result.data };
       } catch (mutationError) {
-        const message = mutationError instanceof Error ? mutationError.message : "Actie mislukt.";
+        const message = mutationError instanceof Error ? mutationError.message : language === "en" ? "Action failed." : "Actie mislukt.";
         if (options?.localUpdate) {
           setInlineFeedback({
             status: "error",
-            message: message.trim() || "Opslaan mislukt.",
+            message: message.trim() || (language === "en" ? "Save failed." : "Opslaan mislukt."),
           });
         }
         if (message.toLowerCase().includes("conflict")) {
-          setError(`${message} Ververs de pagina en probeer opnieuw.`);
+          setError(`${message} ${language === "en" ? "Refresh the page and try again." : "Ververs de pagina en probeer opnieuw."}`);
           return { ok: false, queued: false };
         }
         setError(message);
         return { ok: false, queued: false };
       }
     },
-    [activeWeekId, applyLocalMutation, loadData, refreshQueueCount],
+    [activeWeekId, applyLocalMutation, language, loadData, refreshQueueCount, t],
   );
 
   const updateHourBlockDeadlineWithTaskSync = useCallback(
@@ -2374,7 +2403,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         : null;
 
       if (localDeadlineValue && !deadlineAt) {
-        setError("Ongeldige deadline datum.");
+        setError(language === "en" ? "Invalid deadline date." : "Ongeldige deadline datum.");
         return;
       }
 
@@ -2388,7 +2417,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
       try {
         setError(null);
-        setInlineFeedback({ status: "saving", message: "Deadline opslaan..." });
+        setInlineFeedback({ status: "saving", message: language === "en" ? "Saving deadline..." : "Deadline opslaan..." });
         const result = await mutationFetch(`/api/hour-blocks/${block.id}`, {
           method: "PATCH",
           body: {
@@ -2399,29 +2428,29 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
         await refreshQueueCount();
         if (result.queued) {
-          setNotice("Offline: deadline-updates in wachtrij gezet.");
-          setInlineFeedback({ status: "queued", message: "Offline: deadline in wachtrij." });
+          setNotice(t("Offline: deadline-updates in wachtrij gezet."));
+          setInlineFeedback({ status: "queued", message: t("Offline: deadline in wachtrij.") });
           return;
         }
 
         setNotice(
           matchingBlocks.length > 0
-            ? "Deadline bijgewerkt voor alle gelijke uurbloktaken."
-            : "Deadline bijgewerkt.",
+            ? (language === "en" ? "Deadline updated for all matching time-block tasks." : "Deadline bijgewerkt voor alle gelijke uurbloktaken.")
+            : t("Deadline bijgewerkt."),
         );
-        setInlineFeedback({ status: "saved", message: "Deadline opgeslagen." });
+        setInlineFeedback({ status: "saved", message: language === "en" ? "Deadline saved." : "Deadline opgeslagen." });
         await loadData(activeWeekId);
       } catch (mutationError) {
-        const message = mutationError instanceof Error ? mutationError.message : "Deadline bijwerken mislukt.";
-        setInlineFeedback({ status: "error", message: "Deadline opslaan mislukt." });
+        const message = mutationError instanceof Error ? mutationError.message : language === "en" ? "Updating deadline failed." : "Deadline bijwerken mislukt.";
+        setInlineFeedback({ status: "error", message: language === "en" ? "Saving deadline failed." : "Deadline opslaan mislukt." });
         if (message.toLowerCase().includes("conflict")) {
-          setError(`${message} Ververs de pagina en probeer opnieuw.`);
+          setError(`${message} ${language === "en" ? "Refresh the page and try again." : "Ververs de pagina en probeer opnieuw."}`);
           return;
         }
         setError(message);
       }
     },
-    [activeWeekId, loadData, payload?.hourBlocks, refreshQueueCount],
+    [activeWeekId, language, loadData, payload?.hourBlocks, refreshQueueCount, t],
   );
 
   const addDetailTask = useCallback(async () => {
@@ -2431,7 +2460,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
     const title = detailTaskForm.title.trim();
     if (!title) {
-      setError("Vul eerst een taaktitel in.");
+      setError(language === "en" ? "Enter a task title first." : "Vul eerst een taaktitel in.");
       return;
     }
 
@@ -2445,7 +2474,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       ? localInputToTimezoneIso(detailTaskForm.deadlineAt, "Europe/Amsterdam")
       : null;
     if (detailTaskForm.deadlineAt && !deadlineAt) {
-      setError("Ongeldige deadline datum.");
+      setError(language === "en" ? "Invalid deadline date." : "Ongeldige deadline datum.");
       return;
     }
 
@@ -2460,7 +2489,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         priority: detailTaskForm.priority,
         status: "open",
       },
-      "Taak toegevoegd.",
+      t("Taak toegevoegd."),
       { localUpdate: true, keepCurrentWeek: false },
     );
 
@@ -2491,7 +2520,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       deadlineAt: "",
     }));
     setDetailTaskComposerExpanded(false);
-  }, [detailDay, detailDayIso, detailTaskForm, payload?.week?.id, selectedPlannerDayDetail?.dayDate, sendMutation]);
+  }, [detailDay, detailDayIso, detailTaskForm, language, payload?.week?.id, selectedPlannerDayDetail?.dayDate, sendMutation, t]);
 
   const patchDetailTask = useCallback(
     (taskId: string, body: Record<string, unknown>, successMessage: string) =>
@@ -2503,8 +2532,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   );
 
   const deleteDetailTask = useCallback(
-    (taskId: string) => sendMutation(`/api/tasks/${taskId}`, "DELETE", {}, "Taak verwijderd."),
-    [sendMutation],
+    (taskId: string) => sendMutation(`/api/tasks/${taskId}`, "DELETE", {}, t("Taak verwijderd.")),
+    [sendMutation, t],
   );
   const startHourEntryHoursEdit = useCallback((entry: HourEntry) => {
     setHourEntryHoursEditing((prev) => ({ ...prev, [entry.id]: true }));
@@ -2527,7 +2556,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       const draftValue = hourEntryHoursDrafts[entryId];
       const parsedValue = Number(draftValue);
       if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
-        setError("Ongeldig aantal uren.");
+        setError(language === "en" ? "Invalid number of hours." : "Ongeldig aantal uren.");
         return;
       }
 
@@ -2535,7 +2564,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         `/api/hours/${entryId}`,
         "PATCH",
         { hoursDecimal: parsedValue },
-        "Urenregel bijgewerkt.",
+        t("Urenregel bijgewerkt."),
         { localUpdate: true, silent: true },
       );
 
@@ -2545,7 +2574,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
       cancelHourEntryHoursEdit(entryId);
     },
-    [cancelHourEntryHoursEdit, hourEntryHoursDrafts, sendMutation],
+    [cancelHourEntryHoursEdit, hourEntryHoursDrafts, language, sendMutation, t],
   );
 
   const uploadExcel = async (file: File) => {
@@ -2562,13 +2591,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
       const json = (await response.json()) as { data?: { weekId?: string }; error?: string };
       if (!response.ok) {
-        throw new Error(json.error ?? "Import mislukt");
+        throw new Error(json.error ?? (language === "en" ? "Import failed" : "Import mislukt"));
       }
 
-      setNotice("Excel import voltooid.");
+      setNotice(language === "en" ? "Excel import completed." : "Excel import voltooid.");
       await loadData(json.data?.weekId ?? activeWeekId);
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Import mislukt");
+      setError(uploadError instanceof Error ? uploadError.message : (language === "en" ? "Import failed" : "Import mislukt"));
     }
   };
 
@@ -2580,13 +2609,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
       const json = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(json.error ?? "Drive sync mislukt");
+        throw new Error(json.error ?? t("Drive sync mislukt"));
       }
 
-      setNotice("Drive sync gestart.");
+      setNotice(t("Drive sync gestart."));
       await loadData(activeWeekId);
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : "Sync fout");
+      setError(syncError instanceof Error ? syncError.message : (language === "en" ? "Sync failed" : "Sync fout"));
     }
   };
 
@@ -2595,12 +2624,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       const response = await fetch("/api/integrations/google-drive/connect", { method: "POST" });
       const json = (await response.json()) as { data?: { url: string }; error?: string };
       if (!response.ok || !json.data?.url) {
-        throw new Error(json.error ?? "Drive koppeling mislukt");
+        throw new Error(json.error ?? t("Drive koppeling mislukt"));
       }
 
       window.location.href = json.data.url;
     } catch (connectError) {
-      setError(connectError instanceof Error ? connectError.message : "Drive koppeling mislukt");
+      setError(connectError instanceof Error ? connectError.message : t("Drive koppeling mislukt"));
     }
   };
 
@@ -2615,7 +2644,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     return (
       <div className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-4 py-16">
         <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-slate-700 shadow-sm">
-          Laden...
+          {language === "en" ? "Loading..." : "Laden..."}
         </div>
       </div>
     );
@@ -2625,9 +2654,11 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     return (
       <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-12">
         <div className="w-full rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50">
-          <h1 className="text-2xl font-semibold text-slate-900">Initialisatie mislukt</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{language === "en" ? "Initialization failed" : "Initialisatie mislukt"}</h1>
           <p className="mt-2 text-sm text-slate-600">
-            De app kon geen verbinding maken met de backend-configuratie.
+            {language === "en"
+              ? "The app could not connect to the backend configuration."
+              : "De app kon geen verbinding maken met de backend-configuratie."}
           </p>
           {error ? <div className="mt-4"><ApiError message={error} /></div> : null}
           <button
@@ -2635,7 +2666,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
             className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 text-white"
             onClick={() => void init(true)}
           >
-            Opnieuw proberen
+            {language === "en" ? "Try again" : "Opnieuw proberen"}
           </button>
         </div>
       </div>
@@ -2647,12 +2678,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       <div className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-12">
         <div className="w-full rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50">
           <h1 className="text-2xl font-semibold text-slate-900">
-            {pinStatus.configured ? "Inloggen" : "PIN instellen"}
+            {pinStatus.configured ? t("Inloggen") : t("PIN instellen")}
           </h1>
           <p className="mt-2 text-sm text-slate-600">
             {pinStatus.configured
-              ? "Voer je 6-cijferige PIN in om je weekplanner te openen."
-              : "Kies een 6-cijferige PIN voor deze planner."}
+              ? t("Voer je 6-cijferige PIN in om je weekplanner te openen.")
+              : t("Kies een 6-cijferige PIN voor deze planner.")}
           </p>
 
           <div className="mt-6 space-y-3">
@@ -2671,7 +2702,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
               disabled={pin.length !== 6 || pinSubmitting}
               className="w-full rounded-xl bg-slate-900 px-4 py-3 text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {pinSubmitting ? "Bezig..." : pinStatus.configured ? "Inloggen" : "PIN opslaan"}
+              {pinSubmitting ? t("Bezig...") : pinStatus.configured ? t("Inloggen") : t("PIN opslaan")}
             </button>
           </div>
 
@@ -2684,6 +2715,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   return (
     <div className="mx-auto min-h-screen w-full max-w-6xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
       <PlannerHeader
+        language={language}
         currentWeekLabel={payload?.week.weekLabel ?? "Week"}
         currentRangeText={currentRangeText}
         weekOptions={headerWeekOptions}
@@ -2698,7 +2730,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         plannerSearchQuery={plannerSearchQuery}
         plannerSearchResults={plannerSearchResults}
         weekdayLabels={weekdayLabels}
-        formatDayDateLabel={formatDayDateLabel}
+        formatDayDateLabel={formatDayDateLabelForLanguage}
         onPreviousWeek={() => previousWeek && void loadData(previousWeek.id)}
         onWeekSelect={(weekId) => void loadData(weekId)}
         onNextWeek={() => nextWeek && void loadData(nextWeek.id)}
@@ -2723,6 +2755,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         onOpenSearchResult={(result) => {
           void openPlannerDayDetailForWeek(result.weekId, result.weekday, result.dayDate);
         }}
+        onLanguageChange={setLanguage}
       />
 
       <nav className="mt-5 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
@@ -2731,35 +2764,35 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           className={`rounded-xl px-4 py-2 text-sm ${tab === "planner" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("planner")}
         >
-          Week planner
+          {t("Week planner")}
         </button>
         <button
           type="button"
           className={`rounded-xl px-4 py-2 text-sm ${tab === "hours" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("hours")}
         >
-          Urenregistratie
+          {t("Urenregistratie")}
         </button>
         <button
           type="button"
           className={`rounded-xl px-4 py-2 text-sm ${tab === "blocks" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("blocks")}
         >
-          Uurblokken
+          {t("Uurblokken")}
         </button>
         <button
           type="button"
           className={`rounded-xl px-4 py-2 text-sm ${tab === "past" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("past")}
         >
-          Verlopen dagen
+          {t("Verlopen dagen")}
         </button>
         <button
           type="button"
           className={`rounded-xl px-4 py-2 text-sm ${tab === "log" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
           onClick={() => setTab("log")}
         >
-          Afgevinkt log
+          {t("Afgevinkt log")}
         </button>
       </nav>
 
@@ -2767,7 +2800,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         <section className="order-2 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-6 lg:order-1">
           {!payload ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Weekgegevens laden...
+              {t("Weekgegevens laden...")}
             </div>
           ) : null}
           {tab === "planner" && payload ? (
@@ -2786,13 +2819,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 </select>
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
-                  placeholder="Taaktitel"
+                  placeholder={t("Taaktitel")}
                   value={taskForm.title}
                   onChange={(event) => setTaskForm((prev) => ({ ...prev, title: event.target.value }))}
                 />
                 <input
                   className="rounded-xl border border-slate-300 px-3 py-2"
-                  placeholder="Info"
+                  placeholder={t("Info")}
                   value={taskForm.info}
                   onChange={(event) => setTaskForm((prev) => ({ ...prev, info: event.target.value }))}
                 />
@@ -2807,7 +2840,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   value={taskDeadlineTimeValue}
                   onChange={(event) => applyTaskDeadlineTime(event.target.value)}
                 >
-                  <option value="">Sneltijd deadline</option>
+                  <option value="">{t("Sneltijd deadline")}</option>
                   {TIME_OPTIONS.map((time) => (
                     <option key={`task-deadline-${time}`} value={time}>
                       {time}
@@ -2819,9 +2852,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   value={taskForm.priority}
                   onChange={(event) => setTaskForm((prev) => ({ ...prev, priority: event.target.value }))}
                 >
-                  <option value="hoog">Hoog</option>
-                  <option value="middel">Middel</option>
-                  <option value="laag">Laag</option>
+                  <option value="hoog">{t("Hoog")}</option>
+                  <option value="middel">{t("Middel")}</option>
+                  <option value="laag">{t("Laag")}</option>
                 </select>
                 <button
                   type="button"
@@ -2829,13 +2862,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   disabled={!plannerDayOptions.length}
                   onClick={() => {
                     if (!plannerDayOptions.length) {
-                      setError("Geen werkdagen beschikbaar in deze week.");
+                      setError(language === "en" ? "No workdays available in this week." : "Geen werkdagen beschikbaar in deze week.");
                       return;
                     }
 
                     const title = taskForm.title.trim();
                     if (!title) {
-                      setError("Vul eerst een taaktitel in.");
+                      setError(language === "en" ? "Enter a task title first." : "Vul eerst een taaktitel in.");
                       return;
                     }
 
@@ -2843,7 +2876,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       ? localInputToTimezoneIso(taskForm.deadlineAt, "Europe/Amsterdam")
                       : null;
                     if (taskForm.deadlineAt && !deadlineAt) {
-                      setError("Ongeldige deadline datum.");
+                      setError(language === "en" ? "Invalid deadline date." : "Ongeldige deadline datum.");
                       return;
                     }
 
@@ -2857,7 +2890,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                           info: taskForm.info.trim(),
                           deadlineAt,
                         },
-                        "Taak toegevoegd.",
+                        t("Taak toegevoegd."),
                         { localUpdate: true, keepCurrentWeek: false },
                       );
 
@@ -2877,7 +2910,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     })();
                   }}
                 >
-                  Taak toevoegen
+                  {t("Taak toevoegen")}
                 </button>
               </div>
 
@@ -2899,7 +2932,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       {weekdayLabels[day.weekday]}
                       {day.dayDate ? (
                         <span className="ml-2 text-sm font-normal text-slate-500">
-                          ({formatDayDateLabel(day.dayDate)})
+                          ({formatDayDateLabelForLanguage(day.dayDate)})
                         </span>
                       ) : null}
                       <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-normal text-slate-600">
@@ -2911,11 +2944,11 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
                       onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
                     >
-                      Open dag
+                      {t("Open dag")}
                     </button>
                   </div>
                   {day.isToday ? (
-                    <p className="mt-2 text-xs text-blue-700">Nu: {liveNowAmsterdam}</p>
+                    <p className="mt-2 text-xs text-blue-700">{t("Nu")}: {liveNowAmsterdam}</p>
                   ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(() => {
@@ -2935,7 +2968,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       );
 
                       if (!labels.length) {
-                        return <p className="text-sm text-slate-500">Geen taken voor deze dag.</p>;
+                        return <p className="text-sm text-slate-500">{t("Geen taken voor deze dag.")}</p>;
                       }
 
                       return labels.map((label) => (
@@ -2949,13 +2982,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     })()}
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
-                    Open dag voor details, uurblokken, uren en bewerken.
+                    {t("Open dag voor details, uurblokken, uren en bewerken.")}
                   </p>
                 </div>
               ))}
               {plannerUpcomingDays.length === 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  Geen aankomende werkdagen gevonden. Bekijk eerdere dagen in het tabblad <strong>Verlopen dagen</strong>.
+                  {t("Geen aankomende werkdagen gevonden. Bekijk eerdere dagen in het tabblad ")}
+                  <strong>{t("Verlopen dagen")}</strong>.
                 </div>
               ) : null}
             </div>
@@ -2965,9 +2999,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
             <div className="space-y-5">
               <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Dagreflecties</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("Dagreflecties")}</p>
                   <p className="mt-1 text-sm text-slate-600">
-                    Gebruik grotere notitievakken voor reflecties per dag en maak ze later weer compact.
+                    {t("Gebruik grotere notitievakken voor reflecties per dag en maak ze later weer compact.")}
                   </p>
                 </div>
                 <button
@@ -2975,7 +3009,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                   onClick={() => setHoursNotesExpanded((prev) => !prev)}
                 >
-                  {hoursNotesExpanded ? "Compacte notities" : "Grotere notities"}
+                  {hoursNotesExpanded ? t("Compacte notities") : t("Grotere notities")}
                 </button>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -2994,7 +3028,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   }}
                 />
                 <div className="flex items-center rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-slate-700">
-                  {hourFormDerivedWeekday ? weekdayLabels[hourFormDerivedWeekday] : "Geen werkdag (ma-vr)"}
+                  {hourFormDerivedWeekday ? weekdayLabels[hourFormDerivedWeekday] : t("Geen werkdag (ma-vr)")}
                 </div>
                 <select
                   value={hourForm.hoursDecimal}
@@ -3018,14 +3052,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 >
                   {hourSelectOptions.map((value) => (
                     <option key={`hours-${value}`} value={value}>
-                      {value} uur
+                      {value}u
                     </option>
                   ))}
                 </select>
                 <input
                   value={hourForm.projectName}
                   className="rounded-xl border border-slate-300 px-3 py-2"
-                  placeholder="Project / categorie"
+                  placeholder={t("Project / categorie")}
                   onChange={(event) => setHourForm((prev) => ({ ...prev, projectName: event.target.value }))}
                 />
                 <textarea
@@ -3034,11 +3068,11 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   className={`rounded-xl border border-slate-300 px-3 py-2 resize-y ${
                     hoursNotesExpanded ? "min-h-[8rem] sm:col-span-2 lg:col-span-3" : "min-h-[5.5rem] sm:col-span-2 lg:col-span-2"
                   }`}
-                  placeholder="Reflectie of notitie van deze dag"
+                  placeholder={t("Reflectie of notitie van deze dag")}
                   onChange={(event) => setHourForm((prev) => ({ ...prev, noteText: event.target.value }))}
                 />
                 <div className="rounded-xl border border-slate-300 bg-slate-50 p-3 sm:col-span-2 lg:col-span-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Uren calculator</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("Uren calculator")}</p>
                   <div className="mt-2 grid gap-2 sm:grid-cols-3">
                     <input
                       type="time"
@@ -3058,13 +3092,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       step="15"
                       value={hoursCalcForm.breakMinutes}
                       className="rounded-lg border border-slate-300 px-3 py-2"
-                      placeholder="Pauze (min)"
+                      placeholder={t("Pauze (min)")}
                       onChange={(event) => setHoursCalcForm((prev) => ({ ...prev, breakMinutes: event.target.value }))}
                     />
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     <p className="text-sm text-slate-600">
-                      Berekend: {hoursCalculated != null ? `${hoursCalculated}u` : "ongeldige tijd"}
+                      {t("Berekend")}: {hoursCalculated != null ? `${hoursCalculated}u` : t("ongeldige tijd")}
                     </p>
                     <button
                       type="button"
@@ -3077,7 +3111,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       }
                       disabled={hoursCalculated == null}
                     >
-                      Gebruik berekening
+                      {t("Gebruik berekening")}
                     </button>
                   </div>
                 </div>
@@ -3087,7 +3121,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   disabled={!hourFormDerivedWeekday || Number(hourForm.hoursDecimal) <= 0}
                   onClick={() => {
                     if (!hourFormDerivedWeekday) {
-                      setError("Kies een werkdag (maandag t/m vrijdag) voor urenregistratie.");
+                      setError(t("Kies een werkdag (maandag t/m vrijdag) voor urenregistratie."));
                       return;
                     }
 
@@ -3099,33 +3133,33 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         weekday: hourFormDerivedWeekday,
                         hoursDecimal: Number(hourForm.hoursDecimal),
                       },
-                      "Uren toegevoegd.",
+                      t("Uren toegevoegd."),
                       { localUpdate: true, keepCurrentWeek: false },
                     );
                   }}
                 >
-                  Uren toevoegen
+                  {t("Uren toevoegen")}
                 </button>
                 <p className="text-xs text-slate-500 lg:col-span-3">
-                  Tip: scrol met muis/trackpad op het urenveld om snel te wijzigen.
+                  {t("Tip: scrol met muis/trackpad op het urenveld om snel te wijzigen.")}
                 </p>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-600">Totaal zichtbaar</p>
+                  <p className="text-xs text-slate-600">{t("Totaal zichtbaar")}</p>
                   <p className="text-2xl font-semibold text-slate-900">{visibleHoursSummary.totalHours}u</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-600">Actieve week</p>
+                  <p className="text-xs text-slate-600">{t("Actieve week")}</p>
                   <p className="text-2xl font-semibold text-slate-900">{payload.hourSummary.weeklyTotalHours}u</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-600">Weken met uren</p>
+                  <p className="text-xs text-slate-600">{t("Weken met uren")}</p>
                   <p className="text-2xl font-semibold text-slate-900">{visibleHoursSummary.perWeekTotals.length}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-3">
-                  <p className="text-xs text-slate-600">Per week</p>
+                  <p className="text-xs text-slate-600">{t("Per week")}</p>
                   <div className="mt-1 flex flex-wrap gap-2 text-sm">
                     {visibleHoursSummary.perWeekTotals.length ? (
                       visibleHoursSummary.perWeekTotals.map((item) => (
@@ -3134,12 +3168,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         </span>
                       ))
                     ) : (
-                      <span className="text-slate-500">Nog geen data</span>
+                      <span className="text-slate-500">{t("Nog geen data")}</span>
                     )}
                   </div>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-3">
-                  <p className="text-xs text-slate-600">Per project</p>
+                  <p className="text-xs text-slate-600">{t("Per project")}</p>
                   <div className="mt-1 flex flex-wrap gap-2 text-sm">
                     {visibleHoursSummary.perProjectTotals.length ? (
                       visibleHoursSummary.perProjectTotals.map((item) => (
@@ -3148,7 +3182,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         </span>
                       ))
                     ) : (
-                      <span className="text-slate-500">Nog geen data</span>
+                      <span className="text-slate-500">{t("Nog geen data")}</span>
                     )}
                   </div>
                 </div>
@@ -3162,7 +3196,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         <h3 className="text-sm font-semibold text-slate-900">
                           {weekdayLabels[group.weekday]}
                           <span className="ml-2 text-xs font-normal text-slate-500">
-                            ({formatDayDateLabel(group.dayDate)})
+                            ({formatDayDateLabelForLanguage(group.dayDate)})
                           </span>
                           <span className="ml-2 rounded bg-white px-2 py-0.5 text-[11px] font-normal text-slate-600">
                             {group.weekLabel}
@@ -3191,7 +3225,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                     `/api/hours/${entry.id}`,
                                     "PATCH",
                                     { dayDate: event.target.value },
-                                    "Urenregel bijgewerkt.",
+                                    t("Urenregel bijgewerkt."),
                                     { localUpdate: true, silent: true, keepCurrentWeek: false },
                                   )
                                 }
@@ -3221,14 +3255,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                         className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-medium text-white"
                                         onClick={() => void saveHourEntryHours(entry.id)}
                                       >
-                                        Opslaan
+                                        {t("Opslaan")}
                                       </button>
                                       <button
                                         type="button"
                                         className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
                                         onClick={() => cancelHourEntryHoursEdit(entry.id)}
                                       >
-                                        Annuleer
+                                        {t("Annuleer")}
                                       </button>
                                     </div>
                                   </div>
@@ -3240,7 +3274,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                       className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
                                       onClick={() => startHourEntryHoursEdit(entry)}
                                     >
-                                      Corrigeer uren
+                                        {t("Corrigeer uren")}
                                     </button>
                                   </div>
                                 )}
@@ -3249,13 +3283,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                 key={`${entry.id}-${entry.updatedAt}-project`}
                                 defaultValue={entry.projectName}
                                 className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
-                                placeholder="Project"
+                                placeholder={t("Project")}
                                 onBlur={(event) =>
                                   void sendMutation(
                                     `/api/hours/${entry.id}`,
                                     "PATCH",
                                     { projectName: event.target.value },
-                                    "Urenregel bijgewerkt.",
+                                    t("Urenregel bijgewerkt."),
                                     { localUpdate: true, silent: true },
                                   )
                                 }
@@ -3267,13 +3301,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                 className={`rounded-lg border border-slate-300 px-2 py-1 text-sm resize-y lg:col-span-2 ${
                                   hoursNotesExpanded ? "min-h-[8rem]" : "min-h-[5.5rem]"
                                 }`}
-                                placeholder="Reflectie of notitie"
+                                placeholder={t("Reflectie of notitie")}
                                 onBlur={(event) =>
                                   void sendMutation(
                                     `/api/hours/${entry.id}`,
                                     "PATCH",
                                     { noteText: event.target.value },
-                                    "Urenregel bijgewerkt.",
+                                    t("Urenregel bijgewerkt."),
                                     { localUpdate: true, silent: true },
                                   )
                                 }
@@ -3281,9 +3315,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                               <button
                                 type="button"
                                 className="rounded-lg border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50 lg:col-span-1"
-                                onClick={() => void sendMutation(`/api/hours/${entry.id}`, "DELETE", {}, "Urenregel verwijderd.")}
+                                onClick={() => void sendMutation(`/api/hours/${entry.id}`, "DELETE", {}, t("Urenregel verwijderd."))}
                               >
-                                Verwijder
+                                {t("Verwijder")}
                               </button>
                               </div>
                               <p className="mt-2 text-xs text-slate-500">{weekdayLabels[entry.weekday]}</p>
@@ -3295,7 +3329,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   ))
                 ) : (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-                    Nog geen uren geregistreerd voor deze week.
+                    {t("Nog geen uren geregistreerd voor deze week.")}
                   </div>
                 )}
               </div>
@@ -3305,7 +3339,10 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           {tab === "past" && payload ? (
             <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                Overzicht van alle werkdagen die al voorbij zijn op basis van vandaag ({todayIsoAmsterdam ?? "-"}).
+                {t("Overzicht van alle werkdagen die al voorbij zijn op basis van vandaag ({date}).").replace(
+                  "{date}",
+                  todayIsoAmsterdam ?? "-",
+                )}
               </div>
 
               {pastDaysSummary.length ? (
@@ -3313,7 +3350,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   <article key={`${day.weekId}-${day.weekday}-${day.dayDate}`} className="rounded-xl border border-slate-200 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="font-semibold text-slate-900">
-                        {weekdayLabels[day.weekday]} ({formatDayDateLabel(day.dayDate)})
+                        {weekdayLabels[day.weekday]} ({formatDayDateLabelForLanguage(day.dayDate)})
                         <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-normal text-slate-600">
                           {day.weekLabel}
                         </span>
@@ -3323,7 +3360,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
                         onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
                       >
-                        Open dag
+                        {t("Open dag")}
                       </button>
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -3340,7 +3377,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Nog geen verlopen werkdagen.</p>
+                <p className="text-sm text-slate-500">{t("Nog geen verlopen werkdagen.")}</p>
               )}
             </div>
           ) : null}
@@ -3348,7 +3385,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           {tab === "log" && payload ? (
             <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                Alle afgevinkte taken met project, info en exacte datum/tijd van afvinken.
+                {t("Alle afgevinkte taken met project, info en exacte datum/tijd van afvinken.")}
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="flex flex-wrap gap-2">
@@ -3361,7 +3398,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     }`}
                     onClick={() => setLogDateFilter("all")}
                   >
-                    Alles
+                    {t("Alles")}
                   </button>
                   <button
                     type="button"
@@ -3372,7 +3409,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     }`}
                     onClick={() => setLogDateFilter("today")}
                   >
-                    Vandaag
+                    {t("Vandaag")}
                   </button>
                   <button
                     type="button"
@@ -3383,7 +3420,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     }`}
                     onClick={() => setLogDateFilter("week")}
                   >
-                    Deze week
+                    {t("Deze week")}
                   </button>
                 </div>
                 <select
@@ -3391,7 +3428,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   value={logProjectFilter}
                   onChange={(event) => setLogProjectFilter(event.target.value)}
                 >
-                  <option value="all">Alle projecten</option>
+                  <option value="all">{t("Alle projecten")}</option>
                   {completedTaskLogProjects.map((projectName) => (
                     <option key={`log-project-${projectName}`} value={projectName}>
                       {projectName}
@@ -3406,13 +3443,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
                     onClick={restoreHiddenLogItems}
                   >
-                    Herstel verborgen logs ({hiddenCompletedLogCount})
+                    {t("Herstel verborgen logs")} ({hiddenCompletedLogCount})
                   </button>
                 </div>
               ) : null}
               <p className="text-xs text-slate-500">
-                Resultaten: {filteredCompletedTaskLog.length}
-                {hiddenCompletedLogCount ? ` • Verborgen: ${hiddenCompletedLogCount}` : ""}
+                {t("Resultaten")}: {filteredCompletedTaskLog.length}
+                {hiddenCompletedLogCount ? ` • ${t("Verborgen")}: ${hiddenCompletedLogCount}` : ""}
               </p>
 
               {filteredCompletedTaskLog.length ? (
@@ -3423,7 +3460,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         <div>
                           <h3 className="font-semibold text-slate-900">{item.title}</h3>
                           <p className="text-xs text-slate-500">
-                            {weekdayLabels[item.weekday]} • {formatIsoDateAmsterdam(item.dayDate)}
+                            {weekdayLabels[item.weekday]} • {formatIsoDateForLanguage(item.dayDate)}
                           </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
@@ -3434,14 +3471,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                               void openPlannerDayDetailForWeek(item.weekId, item.weekday, item.dayDate)
                             }
                           >
-                            Open dag
+                            {t("Open dag")}
                           </button>
                           <button
                             type="button"
                             className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
                             onClick={() => hideCompletedLogItem(item.taskId)}
                           >
-                            Verwijder uit log
+                            {t("Verwijder uit log")}
                           </button>
                         </div>
                       </div>
@@ -3449,26 +3486,26 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         <div className="rounded-lg bg-slate-50 p-2">
                           <p className="text-[11px] uppercase tracking-wide text-slate-500">Project</p>
-                          <p className="text-sm text-slate-800">{item.projectText || "Geen project gekoppeld"}</p>
+                          <p className="text-sm text-slate-800">{item.projectText || t("Geen project gekoppeld")}</p>
                         </div>
                         <div className="rounded-lg bg-slate-50 p-2">
-                          <p className="text-[11px] uppercase tracking-wide text-slate-500">Afgevinkt op</p>
-                          <p className="text-sm text-slate-800">{formatDateTimeAmsterdam(item.checkedAt)}</p>
+                          <p className="text-[11px] uppercase tracking-wide text-slate-500">{t("Afgevinkt op")}</p>
+                          <p className="text-sm text-slate-800">{formatDateTimeForLanguage(item.checkedAt)}</p>
                         </div>
                         <div className="rounded-lg bg-slate-50 p-2">
                           <p className="text-[11px] uppercase tracking-wide text-slate-500">Deadline</p>
-                          <p className="text-sm text-slate-800">{formatDateTimeAmsterdam(item.deadlineAt)}</p>
+                          <p className="text-sm text-slate-800">{formatDateTimeForLanguage(item.deadlineAt)}</p>
                         </div>
                         <div className="rounded-lg bg-slate-50 p-2">
                           <p className="text-[11px] uppercase tracking-wide text-slate-500">Info</p>
-                          <p className="text-sm text-slate-800">{item.info || "Geen extra info"}</p>
+                          <p className="text-sm text-slate-800">{item.info || t("Geen extra info")}</p>
                         </div>
                       </div>
                     </article>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500">Geen afgevinkte taken voor de gekozen filters.</p>
+                <p className="text-sm text-slate-500">{t("Geen afgevinkte taken voor de gekozen filters.")}</p>
               )}
             </div>
           ) : null}
@@ -3534,13 +3571,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 <input
                   className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 lg:col-span-1"
                   value={blockForm.taskText}
-                  placeholder="Taak"
+                  placeholder={t("Taak")}
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, taskText: event.target.value }))}
                 />
                 <input
                   className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 lg:col-span-1"
                   value={blockForm.projectText}
-                  placeholder="Project"
+                  placeholder={t("Project")}
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, projectText: event.target.value }))}
                 />
                 <input
@@ -3555,7 +3592,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   disabled={!blockFormRangeValid}
                   onClick={() => {
                     if (!blockFormRangeValid) {
-                      setError("Eindtijd moet later zijn dan begintijd.");
+                      setError(t("Eindtijd moet later zijn dan begintijd."));
                       return;
                     }
                     const deadlineAt = blockForm.deadlineAt
@@ -3573,29 +3610,29 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         ...blockForm,
                         deadlineAt,
                       },
-                      "Uurblok toegevoegd.",
+                      t("Uurblok toegevoegd."),
                       { localUpdate: true, keepCurrentWeek: false },
                     );
                   }}
                 >
-                  Uurblok toevoegen
+                  {t("Uurblok toevoegen")}
                 </button>
               </div>
               <p className="text-xs text-slate-500">
-                Tijden zijn scrollbaar; eindtijd moet altijd later zijn dan begintijd.
+                {t("Tijden zijn scrollbaar; eindtijd moet altijd later zijn dan begintijd.")}
               </p>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-600">Aankomende uurblokken</p>
+                  <p className="text-xs text-slate-600">{t("Aankomende uurblokken")}</p>
                   <p className="text-2xl font-semibold text-slate-900">{upcomingBlocksTotal}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-600">Klaar</p>
+                  <p className="text-xs text-slate-600">{t("Klaar")}</p>
                   <p className="text-2xl font-semibold text-slate-900">{upcomingBlocksDoneTotal}</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs text-slate-600">Aankomende dagen</p>
+                  <p className="text-xs text-slate-600">{t("Aankomende dagen")}</p>
                   <p className="text-2xl font-semibold text-slate-900">{upcomingBlockGroups.length}</p>
                 </div>
               </div>
@@ -3613,7 +3650,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         <h3 className="font-semibold text-slate-900">
                           {weekdayLabels[group.weekday]}
                           <span className="ml-2 text-sm font-normal text-slate-500">
-                            ({formatDayDateLabel(group.dayDate)})
+                            ({formatDayDateLabelForLanguage(group.dayDate)})
                           </span>
                           <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-normal text-slate-600">
                             {group.weekLabel}
@@ -3621,24 +3658,24 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         </h3>
                         <div className="flex items-center gap-2">
                           <span className="rounded-full border border-slate-300 px-2 py-1 text-xs text-slate-600">
-                            {group.blocks.filter((block) => block.status === "klaar").length}/{group.blocks.length} klaar
+                            {group.blocks.filter((block) => block.status === "klaar").length}/{group.blocks.length} {t("Klaar").toLowerCase()}
                           </span>
                           <button
                             type="button"
                             className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
                             onClick={() => void openPlannerDayDetailForWeek(group.weekId, group.weekday, group.dayDate)}
                           >
-                            Open dag
+                            {t("Open dag")}
                           </button>
                         </div>
                       </div>
-                      {group.isToday ? <p className="mt-1 text-xs text-blue-700">Nu: {liveNowAmsterdam}</p> : null}
+                      {group.isToday ? <p className="mt-1 text-xs text-blue-700">{t("Nu")}: {liveNowAmsterdam}</p> : null}
                       <p className="mt-1 text-xs text-slate-500">
-                        Taken {group.taskDone}/{group.tasks.length} • Uren {group.hoursTotal}u
+                        {t("Taken")} {group.taskDone}/{group.tasks.length} • {t("Urenregistratie")} {group.hoursTotal}u
                       </p>
 
                       <div className="mt-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Taken voor deze dag</p>
+                        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("Taken voor deze dag")}</p>
                         {group.tasks.length ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {group.tasks.map((task) => (
@@ -3655,7 +3692,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                             ))}
                           </div>
                         ) : (
-                          <p className="mt-1 text-sm text-slate-500">Geen taken gekoppeld.</p>
+                          <p className="mt-1 text-sm text-slate-500">{t("Geen taken gekoppeld.")}</p>
                         )}
                       </div>
 
@@ -3682,7 +3719,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                 </p>
                               </div>
                               <span className="rounded-full border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700">
-                                {blockGroup.hasMixedStatus ? "Gemengde status" : blockGroup.primaryStatus}
+                                {blockGroup.hasMixedStatus ? t("Gemengde status") : translateStatus(language, blockGroup.primaryStatus)}
                               </span>
                             </div>
 
@@ -3702,23 +3739,23 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                       `/api/hour-blocks/${block.id}`,
                                       "PATCH",
                                       { status: event.target.value, expectedUpdatedAt: block.updatedAt },
-                                      "Uurblok status bijgewerkt.",
+                                      t("Uurblok status bijgewerkt."),
                                       { localUpdate: true, silent: true },
                                     )
                                   }
                                 >
-                                  <option value="open">Open</option>
-                                  <option value="bezig">Bezig</option>
-                                  <option value="klaar">Klaar</option>
+                                  <option value="open">{translateStatus(language, "open")}</option>
+                                  <option value="bezig">{translateStatus(language, "bezig")}</option>
+                                  <option value="klaar">{translateStatus(language, "klaar")}</option>
                                 </select>
                                 <button
                                   type="button"
                                   className="text-sm text-red-600"
                                   onClick={() =>
-                                    void sendMutation(`/api/hour-blocks/${block.id}`, "DELETE", {}, "Uurblok verwijderd.")
+                                    void sendMutation(`/api/hour-blocks/${block.id}`, "DELETE", {}, t("Uurblok verwijderd."))
                                   }
                                 >
-                                  Verwijder
+                                  {t("Verwijder")}
                                 </button>
                               </div>
                             </div>
@@ -3737,7 +3774,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                       dayDate: event.target.value || null,
                                       expectedUpdatedAt: block.updatedAt,
                                     },
-                                    "Uurblok datum bijgewerkt.",
+                                    t("Uurblok datum bijgewerkt."),
                                     { localUpdate: true, silent: true, keepCurrentWeek: false },
                                   )
                                 }
@@ -3751,7 +3788,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                     `/api/hour-blocks/${block.id}`,
                                     "PATCH",
                                     { timeStart: event.target.value, expectedUpdatedAt: block.updatedAt },
-                                    "Starttijd bijgewerkt.",
+                                    t("Starttijd bijgewerkt."),
                                     { localUpdate: true, silent: true },
                                   )
                                 }
@@ -3771,7 +3808,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                     `/api/hour-blocks/${block.id}`,
                                     "PATCH",
                                     { timeEnd: event.target.value, expectedUpdatedAt: block.updatedAt },
-                                    "Eindtijd bijgewerkt.",
+                                    t("Eindtijd bijgewerkt."),
                                     { localUpdate: true, silent: true },
                                   )
                                 }
@@ -3786,13 +3823,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                 key={`${block.id}-${block.updatedAt}-task`}
                                 defaultValue={block.taskText}
                                 className="col-span-2 rounded-lg border border-slate-300 px-2 py-1 text-sm lg:col-span-1"
-                                placeholder="Taak"
+                                placeholder={t("Taak")}
                                 onBlur={(event) =>
                                   void sendMutation(
                                     `/api/hour-blocks/${block.id}`,
                                     "PATCH",
                                     { taskText: event.target.value, expectedUpdatedAt: block.updatedAt },
-                                    "Uurblok bijgewerkt.",
+                                      t("Uurblok bijgewerkt."),
                                     { localUpdate: true, silent: true },
                                   )
                                 }
@@ -3801,13 +3838,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                 key={`${block.id}-${block.updatedAt}-project`}
                                 defaultValue={block.projectText}
                                 className="col-span-2 rounded-lg border border-slate-300 px-2 py-1 text-sm lg:col-span-1"
-                                placeholder="Project"
+                                placeholder={t("Project")}
                                 onBlur={(event) =>
                                   void sendMutation(
                                     `/api/hour-blocks/${block.id}`,
                                     "PATCH",
                                     { projectText: event.target.value, expectedUpdatedAt: block.updatedAt },
-                                    "Uurblok bijgewerkt.",
+                                      t("Uurblok bijgewerkt."),
                                     { localUpdate: true, silent: true },
                                   )
                                 }
@@ -3828,13 +3865,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                           </section>
                           ))
                         ) : (
-                          <p className="text-sm text-slate-500">Geen uurblokken voor deze dag.</p>
+                          <p className="text-sm text-slate-500">{t("Geen uurblokken voor deze dag.")}</p>
                         )}
                       </div>
                     </section>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500">Nog geen aankomende uurblokken.</p>
+                  <p className="text-sm text-slate-500">{t("Nog geen aankomende uurblokken.")}</p>
                 )}
               </div>
             </div>
@@ -3844,7 +3881,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         <aside className="order-1 flex flex-col gap-4 lg:order-2">
           <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${dayOverviewCardClass}`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-sm font-semibold text-slate-900">Dagoverzicht</h2>
+              <h2 className="text-sm font-semibold text-slate-900">{t("Dagoverzicht")}</h2>
               <select
                 value={todoDay}
                 className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-700 sm:w-auto"
@@ -3859,12 +3896,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
             </div>
 
             <p className="mt-1 text-xs text-slate-500">
-              Taken {todayDoneCount}/{todayTasks.length} klaar • Uurblokken {dayHourBlocks.length} • Uren {dayHoursTotal}u
+              {t("Taken")} {todayDoneCount}/{todayTasks.length} {t("Klaar").toLowerCase()} • {t("Uurblokken")} {dayHourBlocks.length} • {t("Urenregistratie")} {dayHoursTotal}u
             </p>
 
             <div className={dayOverviewBodyClass}>
               <div>
-                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Taken</p>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">{t("Taken")}</p>
                 {todayTasks.length ? (
                   todayTasks.map((task) => (
                     <label
@@ -3882,7 +3919,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                               status: event.target.checked ? "klaar" : "open",
                               expectedUpdatedAt: task.updatedAt,
                             },
-                            "To-do status bijgewerkt.",
+                            t("To-do status bijgewerkt."),
                             { localUpdate: true, silent: true },
                           )
                         }
@@ -3894,14 +3931,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     </label>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500">Geen taken voor deze dag.</p>
+                  <p className="text-sm text-slate-500">{t("Geen taken voor deze dag.")}</p>
                 )}
               </div>
 
               <div>
-                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Uurblokken</p>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">{t("Uurblokken")}</p>
                 {selectedDayIsToday ? (
-                  <p className="mb-2 text-xs text-blue-700">Realtime: {liveNowAmsterdam}</p>
+                  <p className="mb-2 text-xs text-blue-700">{t("Realtime")}: {liveNowAmsterdam}</p>
                 ) : null}
                 {dayHourBlocks.length ? (
                   dayHourBlocks.map((block) => (
@@ -3919,33 +3956,33 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                         </p>
                         {selectedDayIsToday && isNowInsideBlock(block.timeStart, block.timeEnd, nowMinutesAmsterdam) ? (
                           <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
-                            Nu
+                            {t("Nu")}
                           </span>
                         ) : null}
                       </div>
                       <p className="text-slate-600">
-                        {block.taskText || "Geen taak"} • {block.projectText || "Geen project"}
+                        {block.taskText || t("Geen taak")} • {block.projectText || t("Geen project")}
                       </p>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500">Geen uurblokken voor deze dag.</p>
+                  <p className="text-sm text-slate-500">{t("Geen uurblokken voor deze dag.")}</p>
                 )}
               </div>
 
               <div>
-                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Urenregistratie</p>
+                <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">{t("Urenregistratie")}</p>
                 {dayHourEntries.length ? (
                   dayHourEntries.map((entry) => (
                     <div key={entry.id} className="mb-2 rounded-lg border border-slate-100 bg-slate-50 p-2 text-sm">
                       <p className="font-medium text-slate-800">{entry.hoursDecimal}u</p>
                       <p className="text-slate-600">
-                        {entry.projectName || "Onbekend project"} • {entry.noteText || "Geen notitie"}
+                        {entry.projectName || t("Onbekend project")} • {entry.noteText || t("Geen notitie")}
                       </p>
                     </div>
                   ))
                 ) : (
-                  <p className="text-sm text-slate-500">Geen urenregistratie voor deze dag.</p>
+                  <p className="text-sm text-slate-500">{t("Geen urenregistratie voor deze dag.")}</p>
                 )}
               </div>
             </div>
@@ -3983,26 +4020,26 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           ) : null}
 
           <div className="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block">
-            <h2 className="text-sm font-semibold text-slate-900">Historie</h2>
+            <h2 className="text-sm font-semibold text-slate-900">{t("Historie")}</h2>
             <div className="mt-3 max-h-[360px] space-y-3 overflow-auto">
               {payload?.history?.length ? (
                 payload.history.map((item: TaskHistory) => (
                   <article key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                     <p className="text-xs text-slate-500">
-                      {new Date(item.createdAt).toLocaleString("nl-NL", { timeZone: "Europe/Amsterdam" })}
+                      {new Date(item.createdAt).toLocaleString(locale, { timeZone: "Europe/Amsterdam" })}
                     </p>
                     <p className="mt-1 text-sm text-slate-800">{item.noteText}</p>
                     <p className="mt-1 text-xs text-slate-500">{item.actor}</p>
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Nog geen historie.</p>
+                <p className="text-sm text-slate-500">{t("Nog geen historie.")}</p>
               )}
             </div>
           </div>
 
           <div className="hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:block">
-            <h2 className="text-sm font-semibold text-slate-900">Laatste imports</h2>
+            <h2 className="text-sm font-semibold text-slate-900">{t("Laatste imports")}</h2>
             <div className="mt-3 space-y-2">
               {payload?.importJobs?.length ? (
                 payload.importJobs.slice(0, 6).map((job) => (
@@ -4014,7 +4051,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Nog geen imports.</p>
+                <p className="text-sm text-slate-500">{t("Nog geen imports.")}</p>
               )}
             </div>
           </div>
@@ -4022,26 +4059,26 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
         <div className="order-3 space-y-4 lg:hidden">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900">Historie</h2>
+            <h2 className="text-sm font-semibold text-slate-900">{t("Historie")}</h2>
             <div className="mt-3 max-h-[360px] space-y-3 overflow-auto">
               {payload?.history?.length ? (
                 payload.history.map((item: TaskHistory) => (
                   <article key={item.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                     <p className="text-xs text-slate-500">
-                      {new Date(item.createdAt).toLocaleString("nl-NL", { timeZone: "Europe/Amsterdam" })}
+                      {new Date(item.createdAt).toLocaleString(locale, { timeZone: "Europe/Amsterdam" })}
                     </p>
                     <p className="mt-1 text-sm text-slate-800">{item.noteText}</p>
                     <p className="mt-1 text-xs text-slate-500">{item.actor}</p>
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Nog geen historie.</p>
+                <p className="text-sm text-slate-500">{t("Nog geen historie.")}</p>
               )}
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900">Laatste imports</h2>
+            <h2 className="text-sm font-semibold text-slate-900">{t("Laatste imports")}</h2>
             <div className="mt-3 space-y-2">
               {payload?.importJobs?.length ? (
                 payload.importJobs.slice(0, 6).map((job) => (
@@ -4053,7 +4090,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">Nog geen imports.</p>
+                <p className="text-sm text-slate-500">{t("Nog geen imports.")}</p>
               )}
             </div>
           </div>
@@ -4062,10 +4099,11 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
       {selectedPlannerDayDetail ? (
         <DayDetailModal
+          language={language}
           weekdayLabels={weekdayLabels}
           detailDay={detailDay}
           detailDayIso={detailDayIso}
-          detailDayLabel={detailDayIso ? formatDayDateLabel(detailDayIso) : null}
+          detailDayLabel={detailDayIso ? formatDayDateLabelForLanguage(detailDayIso) : null}
           weekLabel={selectedPlannerDayDetail.weekLabel}
           liveNowAmsterdam={liveNowAmsterdam}
           detailDoneCount={detailDoneCount}
@@ -4083,7 +4121,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           timeOptions={TIME_OPTIONS}
           formatHourAmount={formatHourAmount}
           isNowInsideBlock={isNowInsideBlock}
-          formatDayDateLabel={formatDayDateLabel}
+          formatDayDateLabel={formatDayDateLabelForLanguage}
           localInputToTimezoneIso={localInputToTimezoneIso}
           onClose={closePlannerDayDetail}
           onToggleComposer={() => setDetailTaskComposerExpanded((prev) => !prev)}
