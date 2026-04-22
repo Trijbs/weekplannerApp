@@ -16,6 +16,9 @@ import { WEEKDAYS } from "@/lib/db/types";
 import { formatIsoToLocalInput } from "@/lib/db/helpers";
 import { DayDetailModal } from "@/components/weekplanner/DayDetailModal";
 import { PlannerHeader } from "@/components/weekplanner/PlannerHeader";
+import { WeekScrollStrip } from "@/components/weekplanner/WeekScrollStrip";
+import { ProjectCombobox } from "@/components/weekplanner/ProjectCombobox";
+import { AssigneeTagInput } from "@/components/weekplanner/AssigneeTagInput";
 import {
   getLocale,
   getMonthLabels,
@@ -235,6 +238,24 @@ function extractProjectFromInfo(info: string): string | null {
 
 function isPauseLabel(value: string): boolean {
   return /pauze/i.test(value);
+}
+
+function levenshteinSimilarity(a: string, b: string): number {
+  const la = a.toLowerCase();
+  const lb = b.toLowerCase();
+  const m = la.length;
+  const n = lb.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = la[i - 1] === lb[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return 1 - dp[m][n] / Math.max(m, n, 1);
 }
 
 function projectNameForTask(task: DayTask, hourBlocks: HourBlock[]): string | null {
@@ -838,6 +859,17 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [logProjectFilter, setLogProjectFilter] = useState<string>("all");
   const [hiddenLogTaskIds, setHiddenLogTaskIds] = useState<string[]>([]);
   const [hoursNotesExpanded, setHoursNotesExpanded] = useState(false);
+  const [timezone, setTimezone] = useState("Europe/Amsterdam");
+  // Hours tab filters
+  const [hoursPeriodFilter, setHoursPeriodFilter] = useState<"all" | "week" | "day">("all");
+  const [hoursDayFilter, setHoursDayFilter] = useState("");
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [mergeModalProject, setMergeModalProject] = useState<string | null>(null);
+  const [mergeTargets, setMergeTargets] = useState<Set<string>>(new Set());
+  // Block form extra fields
+  const [blockAssignees, setBlockAssignees] = useState<string[]>([]);
+  const [blockMultiDay, setBlockMultiDay] = useState(false);
+  const [blockMultiDaySelection, setBlockMultiDaySelection] = useState<Set<Weekday>>(new Set());
 
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [weekSnapshots, setWeekSnapshots] = useState<Record<string, WeekDetailPayload>>({});
@@ -890,6 +922,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       status: "open",
     };
   });
+  const [blockEndTimeAutoSet, setBlockEndTimeAutoSet] = useState(true);
   const [inlineFeedback, setInlineFeedback] = useState<InlineFeedbackState | null>(null);
   const weekdayLabels = useMemo(() => getWeekdayLabels(language), [language]);
   const monthLabels = useMemo(() => getMonthLabels(language), [language]);
@@ -1084,6 +1117,10 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       if (savedLanguage === "nl" || savedLanguage === "en") {
         setLanguage(savedLanguage);
       }
+      const savedTimezone = window.localStorage.getItem("weekplanner.timezone");
+      if (savedTimezone) {
+        setTimezone(savedTimezone);
+      }
     } catch {
       // Ignore unavailable local storage.
     }
@@ -1096,6 +1133,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
     window.localStorage.setItem("weekplanner.language", language);
   }, [language]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem("weekplanner.timezone", timezone);
+  }, [timezone]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1342,6 +1387,27 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const allHourBlocks = useMemo(() => allWeekDetails.flatMap((detail) => detail.hourBlocks), [allWeekDetails]);
   const allHourEntries = useMemo(() => allWeekDetails.flatMap((detail) => detail.hourEntries), [allWeekDetails]);
   const allHistory = useMemo(() => allWeekDetails.flatMap((detail) => detail.history), [allWeekDetails]);
+
+  const filteredHourEntries = useMemo(() => {
+    if (hoursPeriodFilter === "week" && payload?.week) {
+      const { id: weekId } = payload.week;
+      return allHourEntries.filter((e) => e.weekId === weekId);
+    }
+    if (hoursPeriodFilter === "day" && hoursDayFilter) {
+      return allHourEntries.filter((e) => e.dayDate === hoursDayFilter);
+    }
+    return allHourEntries;
+  }, [allHourEntries, hoursPeriodFilter, hoursDayFilter, payload?.week]);
+
+  const allProjectNames = useMemo(
+    () => Array.from(new Set(allHourEntries.map((e) => e.projectName.trim()).filter(Boolean))).sort(),
+    [allHourEntries],
+  );
+
+  const allBlockProjectNames = useMemo(
+    () => Array.from(new Set(allHourBlocks.map((b) => b.projectText.trim()).filter(Boolean))).sort(),
+    [allHourBlocks],
+  );
   const weekMetaById = useMemo(() => {
     const weekMap = new Map<string, { weekLabel: string; startDate: string; endDate: string }>();
 
@@ -1640,7 +1706,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const groupedHourEntriesByDay = useMemo(() => {
     const dayMap = new Map<string, HourEntryDayGroup>();
 
-    for (const entry of allHourEntries) {
+    for (const entry of filteredHourEntries) {
       const weekMeta = weekMetaById.get(entry.weekId);
       const key = `${entry.weekId}:${entry.dayDate}:${entry.weekday}`;
       const existing = dayMap.get(key);
@@ -1684,7 +1750,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     const weekTotals = new Map<string, { weekId: string; weekLabel: string; totalHours: number; startDate: string }>();
     let totalHours = 0;
 
-    for (const entry of allHourEntries) {
+    for (const entry of filteredHourEntries) {
       totalHours += entry.hoursDecimal;
 
       const projectName = entry.projectName.trim() || "Zonder project";
@@ -2756,9 +2822,19 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           void openPlannerDayDetailForWeek(result.weekId, result.weekday, result.dayDate);
         }}
         onLanguageChange={setLanguage}
+        timezone={timezone}
+        onTimezoneChange={setTimezone}
       />
 
-      <nav className="mt-5 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+      <div className="mt-4">
+        <WeekScrollStrip
+          weekOptions={headerWeekOptions}
+          currentWeekId={payload?.week.id ?? null}
+          onWeekSelect={(weekId) => void loadData(weekId)}
+        />
+      </div>
+
+      <nav className="mt-4 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
         <button
           type="button"
           className={`rounded-xl px-4 py-2 text-sm ${tab === "planner" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
@@ -3145,6 +3221,32 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 </p>
               </div>
 
+              {/* Period filter */}
+              <div className="flex flex-wrap gap-2">
+                {(["all", "week", "day"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    className={`rounded-xl px-3 py-1.5 text-sm ${
+                      hoursPeriodFilter === filter
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                    onClick={() => setHoursPeriodFilter(filter)}
+                  >
+                    {filter === "all" ? t("Alles") : filter === "week" ? t("Deze week") : t("Specifieke dag")}
+                  </button>
+                ))}
+                {hoursPeriodFilter === "day" ? (
+                  <input
+                    type="date"
+                    value={hoursDayFilter}
+                    className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm"
+                    onChange={(event) => setHoursDayFilter(event.target.value)}
+                  />
+                ) : null}
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs text-slate-600">{t("Totaal zichtbaar")}</p>
@@ -3172,21 +3274,145 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     )}
                   </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-3">
-                  <p className="text-xs text-slate-600">{t("Per project")}</p>
-                  <div className="mt-1 flex flex-wrap gap-2 text-sm">
-                    {visibleHoursSummary.perProjectTotals.length ? (
-                      visibleHoursSummary.perProjectTotals.map((item) => (
-                        <span key={item.projectName} className="rounded-full bg-slate-900 px-2 py-1 text-white">
-                          {item.projectName}: {item.totalHours}u
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-slate-500">{t("Nog geen data")}</span>
-                    )}
+              </div>
+
+              {/* Per project — collapsible accordion cards */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("Per project")}</p>
+                {visibleHoursSummary.perProjectTotals.length ? (
+                  visibleHoursSummary.perProjectTotals.map((item) => {
+                    const isExpanded = expandedProjects.has(item.projectName);
+                    const projectEntries = filteredHourEntries.filter(
+                      (e) => (e.projectName.trim() || "Zonder project") === item.projectName,
+                    );
+                    return (
+                      <div key={item.projectName} className="rounded-xl border border-slate-200 bg-white">
+                        <div className="flex items-center justify-between gap-2 px-4 py-3">
+                          <button
+                            type="button"
+                            className="flex flex-1 items-center gap-2 text-left"
+                            onClick={() => {
+                              setExpandedProjects((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(item.projectName)) {
+                                  next.delete(item.projectName);
+                                } else {
+                                  next.add(item.projectName);
+                                }
+                                return next;
+                              });
+                            }}
+                          >
+                            <span className="font-medium text-slate-900">{item.projectName}</span>
+                            <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs text-white">
+                              {item.totalHours}u
+                            </span>
+                            <span className="ml-auto text-slate-400">{isExpanded ? "▲" : "▼"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50"
+                            onClick={() => {
+                              setMergeModalProject(item.projectName);
+                              setMergeTargets(new Set());
+                            }}
+                          >
+                            {t("Samenvoegen")}
+                          </button>
+                        </div>
+                        {isExpanded ? (
+                          <div className="border-t border-slate-100 px-4 py-3 space-y-2">
+                            {projectEntries.map((entry) => (
+                              <div key={entry.id} className="flex items-center justify-between text-sm text-slate-700">
+                                <span className="text-slate-500 text-xs w-24 shrink-0">
+                                  {weekdayLabels[entry.weekday]} {formatDayDateLabelForLanguage(entry.dayDate)}
+                                </span>
+                                <span className="flex-1 truncate px-2">{entry.noteText || "-"}</span>
+                                <span className="font-medium shrink-0">{entry.hoursDecimal}u</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-slate-500">{t("Nog geen data")}</p>
+                )}
+              </div>
+
+              {/* Merge modal */}
+              {mergeModalProject ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+                  <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                    <h3 className="font-semibold text-slate-900">{t("Projecten samenvoegen")}</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {t("Kies welke namen samengevoegd worden naar")} <strong>{mergeModalProject}</strong>
+                    </p>
+                    <div className="mt-4 space-y-2 max-h-48 overflow-y-auto">
+                      {allProjectNames
+                        .filter((name) => name !== mergeModalProject)
+                        .sort((a, b) => {
+                          const scoreA = levenshteinSimilarity(mergeModalProject, a);
+                          const scoreB = levenshteinSimilarity(mergeModalProject, b);
+                          return scoreB - scoreA;
+                        })
+                        .map((name) => (
+                          <label key={name} className="flex items-center gap-2 text-sm text-slate-800">
+                            <input
+                              type="checkbox"
+                              checked={mergeTargets.has(name)}
+                              onChange={() => {
+                                setMergeTargets((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(name)) next.delete(name);
+                                  else next.add(name);
+                                  return next;
+                                });
+                              }}
+                            />
+                            {name}
+                          </label>
+                        ))}
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        type="button"
+                        className="flex-1 rounded-xl bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+                        disabled={mergeTargets.size === 0}
+                        onClick={() => {
+                          const canonical = mergeModalProject;
+                          const targets = Array.from(mergeTargets);
+                          void (async () => {
+                            for (const entry of allHourEntries) {
+                              if (targets.includes(entry.projectName.trim())) {
+                                await sendMutation(
+                                  `/api/hours/${entry.id}`,
+                                  "PATCH",
+                                  { projectName: canonical },
+                                  "",
+                                  { silent: true },
+                                );
+                              }
+                            }
+                            setMergeModalProject(null);
+                            setMergeTargets(new Set());
+                          })();
+                        }}
+                      >
+                        {t("Samenvoegen")}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
+                        onClick={() => setMergeModalProject(null)}
+                      >
+                        {t("Annuleren")}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
 
               <div className="space-y-3">
                 {groupedHourEntriesByDay.length ? (
@@ -3513,43 +3739,97 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           {tab === "blocks" && payload ? (
             <div className="space-y-5">
               <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                <select
-                  className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 sm:col-span-1"
-                  value={blockForm.weekday}
-                  onChange={(event) => {
-                    const weekday = event.target.value as Weekday;
-                    const suggestedDate = weekdayIsoMap[weekday];
-                    setBlockForm((prev) => ({
-                      ...prev,
-                      weekday,
-                      dayDate: suggestedDate || prev.dayDate,
-                    }));
-                  }}
-                >
-                  {orderedWeekdays.map((day) => (
-                    <option key={day} value={day}>
-                      {weekdayLabels[day]}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="date"
-                  className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 sm:col-span-1"
-                  value={blockForm.dayDate}
-                  onChange={(event) => {
-                    const dayDate = event.target.value;
-                    const derivedWeekday = weekdayFromIsoDate(dayDate);
-                    setBlockForm((prev) => ({
-                      ...prev,
-                      dayDate,
-                      weekday: derivedWeekday ?? prev.weekday,
-                    }));
-                  }}
-                />
+                {/* Day selector — single day or multi-day toggle */}
+                <div className="col-span-2 flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-sm text-slate-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={blockMultiDay}
+                      onChange={(event) => {
+                        setBlockMultiDay(event.target.checked);
+                        setBlockMultiDaySelection(new Set());
+                      }}
+                    />
+                    {t("Meerdere dagen")}
+                  </label>
+                </div>
+
+                {blockMultiDay ? (
+                  <div className="col-span-2 flex flex-wrap gap-2">
+                    {(["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag"] as Weekday[]).map((day) => (
+                      <button
+                        key={day}
+                        type="button"
+                        className={`rounded-xl border px-3 py-1.5 text-sm ${
+                          blockMultiDaySelection.has(day)
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                        }`}
+                        onClick={() => {
+                          setBlockMultiDaySelection((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(day)) next.delete(day);
+                            else next.add(day);
+                            return next;
+                          });
+                        }}
+                      >
+                        {weekdayLabels[day]}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 sm:col-span-1"
+                      value={blockForm.weekday}
+                      onChange={(event) => {
+                        const weekday = event.target.value as Weekday;
+                        const suggestedDate = weekdayIsoMap[weekday];
+                        setBlockForm((prev) => ({
+                          ...prev,
+                          weekday,
+                          dayDate: suggestedDate || prev.dayDate,
+                        }));
+                      }}
+                    >
+                      {orderedWeekdays.map((day) => (
+                        <option key={day} value={day}>
+                          {weekdayLabels[day]}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="date"
+                      className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 sm:col-span-1"
+                      value={blockForm.dayDate}
+                      onChange={(event) => {
+                        const dayDate = event.target.value;
+                        const derivedWeekday = weekdayFromIsoDate(dayDate);
+                        setBlockForm((prev) => ({
+                          ...prev,
+                          dayDate,
+                          weekday: derivedWeekday ?? prev.weekday,
+                        }));
+                      }}
+                    />
+                  </>
+                )}
+
+                {/* Start time — auto-updates end time */}
                 <select
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   value={blockForm.timeStart}
-                  onChange={(event) => setBlockForm((prev) => ({ ...prev, timeStart: event.target.value }))}
+                  onChange={(event) => {
+                    const timeStart = event.target.value;
+                    setBlockForm((prev) => {
+                      const startIdx = TIME_OPTIONS.indexOf(timeStart);
+                      const endIdx = startIdx >= 0 ? Math.min(startIdx + 4, TIME_OPTIONS.length - 1) : -1;
+                      const autoEnd = blockEndTimeAutoSet && endIdx >= 0 ? TIME_OPTIONS[endIdx] : prev.timeEnd;
+                      return { ...prev, timeStart, timeEnd: autoEnd ?? prev.timeEnd };
+                    });
+                    setBlockEndTimeAutoSet(true);
+                  }}
                 >
                   {TIME_OPTIONS.map((time) => (
                     <option key={`start-${time}`} value={time}>
@@ -3560,7 +3840,10 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 <select
                   className="rounded-xl border border-slate-300 px-3 py-2"
                   value={blockForm.timeEnd}
-                  onChange={(event) => setBlockForm((prev) => ({ ...prev, timeEnd: event.target.value }))}
+                  onChange={(event) => {
+                    setBlockEndTimeAutoSet(false);
+                    setBlockForm((prev) => ({ ...prev, timeEnd: event.target.value }));
+                  }}
                 >
                   {TIME_OPTIONS.map((time) => (
                     <option key={`end-${time}`} value={time}>
@@ -3568,28 +3851,43 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     </option>
                   ))}
                 </select>
+
                 <input
                   className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 lg:col-span-1"
                   value={blockForm.taskText}
                   placeholder={t("Taak")}
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, taskText: event.target.value }))}
                 />
-                <input
-                  className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 lg:col-span-1"
+
+                {/* Project combobox with past suggestions */}
+                <ProjectCombobox
                   value={blockForm.projectText}
+                  suggestions={allBlockProjectNames}
                   placeholder={t("Project")}
-                  onChange={(event) => setBlockForm((prev) => ({ ...prev, projectText: event.target.value }))}
+                  className="col-span-2 lg:col-span-1"
+                  onChange={(value) => setBlockForm((prev) => ({ ...prev, projectText: value }))}
                 />
+
                 <input
                   type="datetime-local"
                   className="col-span-2 rounded-xl border border-slate-300 px-3 py-2 sm:col-span-1"
                   value={blockForm.deadlineAt}
                   onChange={(event) => setBlockForm((prev) => ({ ...prev, deadlineAt: event.target.value }))}
                 />
+
+                {/* Team assignees */}
+                <div className="col-span-2 lg:col-span-4">
+                  <p className="mb-1 text-xs text-slate-500">{t("Teamleden")}</p>
+                  <AssigneeTagInput
+                    assignees={blockAssignees}
+                    onChange={setBlockAssignees}
+                  />
+                </div>
+
                 <button
                   type="button"
                   className="col-span-2 rounded-xl bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-1"
-                  disabled={!blockFormRangeValid}
+                  disabled={!blockFormRangeValid || (blockMultiDay && blockMultiDaySelection.size === 0)}
                   onClick={() => {
                     if (!blockFormRangeValid) {
                       setError(t("Eindtijd moet later zijn dan begintijd."));
@@ -3603,23 +3901,36 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       return;
                     }
 
-                    void sendMutation(
-                      `/api/weeks/${payload.week.id}/hour-blocks`,
-                      "POST",
-                      {
-                        ...blockForm,
-                        deadlineAt,
-                      },
-                      t("Uurblok toegevoegd."),
-                      { localUpdate: true, keepCurrentWeek: false },
-                    );
+                    const daysToCreate = blockMultiDay
+                      ? Array.from(blockMultiDaySelection)
+                      : [blockForm.weekday];
+
+                    for (const day of daysToCreate) {
+                      const suggestedDate = weekdayIsoMap[day];
+                      void sendMutation(
+                        `/api/weeks/${payload.week.id}/hour-blocks`,
+                        "POST",
+                        {
+                          ...blockForm,
+                          weekday: day,
+                          dayDate: suggestedDate || blockForm.dayDate,
+                          deadlineAt,
+                          assignees: blockAssignees,
+                        },
+                        daysToCreate.length === 1 ? t("Uurblok toegevoegd.") : "",
+                        { localUpdate: true, keepCurrentWeek: false, silent: daysToCreate.length > 1 },
+                      );
+                    }
+                    if (daysToCreate.length > 1) {
+                      setNotice(t("Uurblokken toegevoegd."));
+                    }
                   }}
                 >
                   {t("Uurblok toevoegen")}
                 </button>
               </div>
               <p className="text-xs text-slate-500">
-                {t("Tijden zijn scrollbaar; eindtijd moet altijd later zijn dan begintijd.")}
+                {t("Eindtijd wordt automatisch 1 uur na begintijd ingesteld. Aanpassen mag altijd.")}
               </p>
 
               <div className="grid gap-3 sm:grid-cols-3">
@@ -3858,6 +4169,15 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                   void updateHourBlockDeadlineWithTaskSync(block, event.target.value)
                                 }
                               />
+                              {block.assignees.length > 0 ? (
+                                <div className="col-span-2 flex flex-wrap gap-1 lg:col-span-4">
+                                  {block.assignees.map((name) => (
+                                    <span key={name} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
+                                      {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
                             </div>
                           </article>
                               ))}

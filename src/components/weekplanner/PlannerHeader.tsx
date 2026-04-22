@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Weekday } from "@/lib/db/types";
 import type { PlannerSearchResult } from "@/components/weekplanner/types";
 import type { AppLanguage } from "@/lib/i18n";
@@ -24,6 +24,7 @@ type PlannerHeaderProps = {
   notesExportHref: string | null;
   queueCount: number;
   isOnline: boolean;
+  timezone: string;
   daySearchDate: string;
   plannerSearchQuery: string;
   plannerSearchResults: PlannerSearchResult[];
@@ -42,9 +43,35 @@ type PlannerHeaderProps = {
   onPlannerSearchQueryChange: (value: string) => void;
   onOpenSearchResult: (result: PlannerSearchResult) => void;
   onLanguageChange: (language: AppLanguage) => void;
+  onTimezoneChange: (timezone: string) => void;
 };
 
 type MobileSearchOverlay = "day" | "planner" | null;
+
+const COMMON_TIMEZONES = [
+  "Europe/Amsterdam",
+  "Europe/London",
+  "Europe/Berlin",
+  "Europe/Paris",
+  "Europe/Brussels",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Asia/Tokyo",
+  "Asia/Shanghai",
+  "Asia/Dubai",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+];
+
+function MenuIcon({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
 
 function CalendarIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
@@ -82,6 +109,7 @@ export function PlannerHeader({
   notesExportHref,
   queueCount,
   isOnline,
+  timezone,
   daySearchDate,
   plannerSearchQuery,
   plannerSearchResults,
@@ -100,25 +128,36 @@ export function PlannerHeader({
   onPlannerSearchQueryChange,
   onOpenSearchResult,
   onLanguageChange,
+  onTimezoneChange,
 }: PlannerHeaderProps) {
   const [mobileOverlay, setMobileOverlay] = useState<MobileSearchOverlay>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const t = (text: string) => translateStatic(language, text);
-  const matchLabel = (count: number) => {
-    if (language === "en") {
-      return `${count} match${count === 1 ? "" : "es"}`;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
     }
-    return `${count} match${count === 1 ? "" : "es"}`;
-  };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [menuOpen]);
+
+  const matchLabel = (count: number) => `${count} match${count === 1 ? "" : "es"}`;
 
   return (
     <header className="rounded-[2rem] bg-[linear-gradient(135deg,#0f172a,#1d4ed8)] px-4 py-5 text-white shadow-2xl shadow-blue-900/30 sm:px-6 sm:py-8">
-      <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <p className="text-xs uppercase tracking-[0.2em] text-blue-100">Weekplanner</p>
           <h1 className="mt-1 text-3xl font-semibold sm:text-4xl">{currentWeekLabel}</h1>
           <p className="mt-1 text-sm text-blue-100">{currentRangeText}</p>
+
           {weekOptions.length ? (
-            <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 className="rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
@@ -151,85 +190,133 @@ export function PlannerHeader({
                 className="rounded-lg border border-white/30 bg-white/10 px-2 py-1 text-xs"
                 onClick={onCurrentWeek}
               >
-                {t("Naar huidige week")}
+                {t("Nu")}
               </button>
             </div>
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
-          <div className="col-span-2 grid grid-cols-2 gap-2 md:flex">
-            <button
-              type="button"
-              className={`rounded-xl px-3 py-2 text-sm ${language === "nl" ? "bg-white text-slate-900" : "bg-white/10 text-white"}`}
-              onClick={() => onLanguageChange("nl")}
-            >
-              NL
-            </button>
-            <button
-              type="button"
-              className={`rounded-xl px-3 py-2 text-sm ${language === "en" ? "bg-white text-slate-900" : "bg-white/10 text-white"}`}
-              onClick={() => onLanguageChange("en")}
-            >
-              EN
-            </button>
-          </div>
-          <label className="flex cursor-pointer items-center justify-center rounded-xl bg-white/10 px-3 py-2 text-center text-sm backdrop-blur hover:bg-white/20">
-            {t("Excel import")}
-            <input
-              type="file"
-              accept=".xlsx"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) {
-                  onUploadExcel(file);
-                }
-              }}
-            />
-          </label>
+        {/* Overflow menu trigger */}
+        <div className="relative shrink-0" ref={menuRef}>
           <button
             type="button"
-            className="rounded-xl bg-white/10 px-3 py-2 text-sm"
-            onClick={onRunDriveSync}
+            aria-label={t("Menu openen")}
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/30 bg-white/10 backdrop-blur hover:bg-white/20"
+            onClick={() => setMenuOpen((prev) => !prev)}
           >
-            {t("Sync Drive")}
+            <MenuIcon />
           </button>
-          <button
-            type="button"
-            className="rounded-xl bg-white/10 px-3 py-2 text-sm"
-            onClick={onConnectDrive}
-          >
-            {t("Koppel Drive")}
-          </button>
-          {exportHref ? (
-            <a
-              href={exportHref}
-              className="flex items-center justify-center rounded-xl bg-amber-300 px-3 py-2 text-sm font-medium text-slate-900"
-            >
-              {t("Export CSV")}
-            </a>
+
+          {menuOpen ? (
+            <div className="absolute right-0 top-12 z-50 w-64 rounded-2xl border border-white/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.97),rgba(29,78,216,0.97))] p-4 shadow-2xl backdrop-blur">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-blue-200">{t("Instellingen & acties")}</p>
+
+              {/* Language */}
+              <div className="mb-3 flex gap-2">
+                <button
+                  type="button"
+                  className={`flex-1 rounded-xl py-2 text-sm ${language === "nl" ? "bg-white text-slate-900 font-semibold" : "bg-white/10 text-white"}`}
+                  onClick={() => { onLanguageChange("nl"); setMenuOpen(false); }}
+                >
+                  NL
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 rounded-xl py-2 text-sm ${language === "en" ? "bg-white text-slate-900 font-semibold" : "bg-white/10 text-white"}`}
+                  onClick={() => { onLanguageChange("en"); setMenuOpen(false); }}
+                >
+                  EN
+                </button>
+              </div>
+
+              {/* Timezone */}
+              <div className="mb-3">
+                <p className="mb-1 text-xs text-blue-200">{t("Tijdzone")}</p>
+                <select
+                  value={timezone}
+                  className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm text-white"
+                  onChange={(event) => onTimezoneChange(event.target.value)}
+                >
+                  {COMMON_TIMEZONES.map((tz) => (
+                    <option key={tz} value={tz} className="text-slate-900">
+                      {tz}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="my-3 border-t border-white/15" />
+
+              {/* Actions */}
+              <div className="space-y-2">
+                <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/20">
+                  {t("Excel import")}
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        onUploadExcel(file);
+                        setMenuOpen(false);
+                      }
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="w-full rounded-xl bg-white/10 px-3 py-2 text-left text-sm text-white hover:bg-white/20"
+                  onClick={() => { onRunDriveSync(); setMenuOpen(false); }}
+                >
+                  {t("Sync Drive")}
+                </button>
+                <button
+                  type="button"
+                  className="w-full rounded-xl bg-white/10 px-3 py-2 text-left text-sm text-white hover:bg-white/20"
+                  onClick={() => { onConnectDrive(); setMenuOpen(false); }}
+                >
+                  {t("Koppel Drive")}
+                </button>
+                {exportHref ? (
+                  <a
+                    href={exportHref}
+                    className="flex items-center rounded-xl bg-amber-300 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-amber-200"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {t("Export CSV")}
+                  </a>
+                ) : null}
+                {notesExportHref ? (
+                  <a
+                    href={notesExportHref}
+                    className="flex items-center rounded-xl bg-emerald-300 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-emerald-200"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {t("Export notities")}
+                  </a>
+                ) : null}
+                <button
+                  type="button"
+                  className="w-full rounded-xl bg-white/10 px-3 py-2 text-left text-sm text-white hover:bg-white/20"
+                  onClick={() => { onLogout(); setMenuOpen(false); }}
+                >
+                  {t("Uitloggen")}
+                </button>
+              </div>
+            </div>
           ) : null}
-          {notesExportHref ? (
-            <a
-              href={notesExportHref}
-              className="flex items-center justify-center rounded-xl bg-emerald-300 px-3 py-2 text-sm font-medium text-slate-900"
-            >
-              {t("Export notities")}
-            </a>
-          ) : null}
-          <button type="button" className="rounded-xl bg-white/10 px-3 py-2 text-sm" onClick={onLogout}>
-            {t("Uitloggen")}
-          </button>
         </div>
       </div>
 
+      {/* Status chips */}
       <div className="mt-4 flex flex-wrap gap-2 text-xs text-blue-100">
         <span className="rounded-full border border-white/30 px-2 py-1">{isOnline ? t("Online") : t("Offline")}</span>
         <span className="rounded-full border border-white/30 px-2 py-1">{t("Wachtrij")}: {queueCount}</span>
-        <span className="rounded-full border border-white/30 px-2 py-1">{t("Tijdzone")}: Europe/Amsterdam</span>
+        <span className="rounded-full border border-white/30 px-2 py-1">{timezone}</span>
       </div>
 
+      {/* Mobile search buttons */}
       <div className="mt-4 grid grid-cols-2 gap-2 md:hidden">
         <button
           type="button"
@@ -239,7 +326,7 @@ export function PlannerHeader({
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-slate-900">
             <CalendarIcon />
           </span>
-            <span className="min-w-0">
+          <span className="min-w-0">
             <span className="block text-sm font-medium text-white">{t("Zoek dag")}</span>
             <span className="block text-xs text-blue-100">{t("Open overlay")}</span>
           </span>
@@ -259,13 +346,14 @@ export function PlannerHeader({
         </button>
       </div>
 
+      {/* Desktop search panels */}
       <div className="mt-4 hidden flex-col gap-2 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur md:flex md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.15em] text-blue-100">{t("Zoek Dag")}</p>
           <p className="mt-1 text-sm text-blue-50">
             {language === "en"
-              ? "Choose a date and open the day detail immediately to find past or upcoming information."
-              : "Kies een datum en open direct het dagdetail om oude of aankomende informatie terug te vinden."}
+              ? "Choose a date and open the day detail immediately."
+              : "Kies een datum en open direct het dagdetail."}
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -344,6 +432,7 @@ export function PlannerHeader({
         ) : null}
       </div>
 
+      {/* Mobile search overlay */}
       {mobileOverlay ? (
         <div className="fixed inset-0 z-50 bg-slate-950/65 p-4 md:hidden" onClick={() => setMobileOverlay(null)}>
           <div
@@ -373,8 +462,8 @@ export function PlannerHeader({
               <div className="mt-4 space-y-3">
                 <p className="text-sm text-blue-50">
                   {language === "en"
-                    ? "Choose a date and open the day detail immediately to find past or upcoming information."
-                    : "Kies een datum en open direct het dagdetail om oude of aankomende informatie terug te vinden."}
+                    ? "Choose a date and open the day detail immediately."
+                    : "Kies een datum en open direct het dagdetail."}
                 </p>
                 <input
                   type="date"

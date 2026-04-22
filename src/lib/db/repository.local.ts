@@ -561,6 +561,7 @@ export const localDb: DatabaseRepository = {
         status: input.status ?? "open",
         position: input.position ?? 0,
         source: input.source ?? "manual",
+        assignees: input.assignees ?? [],
         createdAt: nowIso(),
         updatedAt: nowIso(),
       };
@@ -603,6 +604,7 @@ export const localDb: DatabaseRepository = {
       if (patch.status) block.status = patch.status;
       if (patch.position !== undefined) block.position = patch.position;
       if (patch.source) block.source = patch.source;
+      if (patch.assignees !== undefined) block.assignees = patch.assignees;
       block.updatedAt = nowIso();
 
       const changes = computeDiff(before as unknown as Record<string, unknown>, block as unknown as Record<string, unknown>);
@@ -867,6 +869,7 @@ export const localDb: DatabaseRepository = {
             status: input.status ?? "open",
             position: input.position ?? 0,
             source: "import",
+            assignees: input.assignees ?? [],
             createdAt: nowIso(),
             updatedAt: nowIso(),
           };

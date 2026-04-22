@@ -231,6 +231,7 @@ function mapHourBlock(row: SqlRow): HourBlock {
     status: String(row.status) as HourBlock["status"],
     position: Number(row.position ?? 0),
     source: String(row.source ?? "manual") as HourBlock["source"],
+    assignees: Array.isArray(row.assignees) ? (row.assignees as string[]) : [],
     createdAt: toIsoDateTime(row.created_at),
     updatedAt: toIsoDateTime(row.updated_at),
   };
@@ -956,8 +957,9 @@ export const neonDb: DatabaseRepository = {
           deadline_at,
           status,
           position,
-          source
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          source,
+          assignees
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         returning *
       `,
       [
@@ -972,6 +974,7 @@ export const neonDb: DatabaseRepository = {
         input.status ?? "open",
         input.position ?? 0,
         input.source ?? "manual",
+        input.assignees ?? [],
       ],
       "Kan uurblok niet aanmaken",
     );
@@ -1022,6 +1025,7 @@ export const neonDb: DatabaseRepository = {
       status: patch.status ?? existing.status,
       position: patch.position !== undefined ? patch.position : existing.position,
       source: patch.source ?? existing.source,
+      assignees: patch.assignees !== undefined ? patch.assignees : existing.assignees,
     };
 
     const row = await queryOne(
@@ -1038,7 +1042,8 @@ export const neonDb: DatabaseRepository = {
             status = $10,
             position = $11,
             source = $12,
-            updated_at = $13
+            assignees = $13,
+            updated_at = $14
         where id = $1
         returning *
       `,
@@ -1055,6 +1060,7 @@ export const neonDb: DatabaseRepository = {
         next.status,
         next.position,
         next.source,
+        next.assignees,
         nowIso(),
       ],
       "Kan uurblok niet bijwerken",
@@ -1458,8 +1464,9 @@ export const neonDb: DatabaseRepository = {
               deadline_at,
               status,
               position,
-              source
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              source,
+              assignees
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             returning *
           `,
           [
@@ -1474,6 +1481,7 @@ export const neonDb: DatabaseRepository = {
             input.status ?? "open",
             input.position ?? 0,
             "import",
+            input.assignees ?? [],
           ],
           "Kan import uurblok niet aanmaken",
         );

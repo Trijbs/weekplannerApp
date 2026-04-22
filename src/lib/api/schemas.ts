@@ -37,6 +37,7 @@ export const hourBlockCreateSchema = z.object({
   deadlineAt: z.union([z.string(), z.null()]).optional().default(null),
   status: taskStatusSchema.optional().default("open"),
   position: z.number().int().min(0).optional().default(0),
+  assignees: z.array(z.string().max(80)).optional().default([]),
 });
 
 export const hourBlockPatchSchema = z.object({
@@ -49,6 +50,7 @@ export const hourBlockPatchSchema = z.object({
   deadlineAt: z.union([z.string(), z.null()]).optional(),
   status: taskStatusSchema.optional(),
   position: z.number().int().min(0).optional(),
+  assignees: z.array(z.string().max(80)).optional(),
   expectedUpdatedAt: z.string().min(1).optional(),
 });
 

@@ -80,6 +80,7 @@ export interface HourBlock {
   status: TaskStatus;
   position: number;
   source: SourceType;
+  assignees: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -184,6 +185,7 @@ export interface HourBlockInput {
   status?: TaskStatus;
   position?: number;
   source?: SourceType;
+  assignees?: string[];
 }
 
 export interface HourBlockPatch extends Partial<HourBlockInput> {
