@@ -125,6 +125,7 @@ export function DayDetailModal({
               <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
                 <div className="grid gap-2 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.1fr)_minmax(0,1.15fr)_auto]">
                   <input
+                    autoFocus
                     value={detailTaskForm.title}
                     className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                     placeholder={t("Nieuwe taak")}

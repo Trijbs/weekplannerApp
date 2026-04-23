@@ -4452,7 +4452,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           formatDayDateLabel={formatDayDateLabelForLanguage}
           localInputToTimezoneIso={localInputToTimezoneIso}
           onClose={closePlannerDayDetail}
-          onToggleComposer={() => setDetailTaskComposerExpanded((prev) => !prev)}
+          onToggleComposer={() => {
+            setDetailTaskComposerExpanded((prev) => {
+              if (prev) {
+                setDetailTaskForm({ title: "", info: "", scheduleHint: "", deadlineAt: "", priority: "middel" });
+              }
+              return !prev;
+            });
+          }}
           onDetailTaskFormChange={(patch) => setDetailTaskForm((prev) => ({ ...prev, ...patch }))}
           onApplyDetailTaskDeadlineTime={applyDetailTaskDeadlineTime}
           onAddTask={() => addDetailTask()}
