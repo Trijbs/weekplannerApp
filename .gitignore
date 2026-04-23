@@ -23,6 +23,7 @@
 
 # misc
 .DS_Store
+.superpowers/
 *.pem
 *.dump
 *.tgz
