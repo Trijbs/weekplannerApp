@@ -13,7 +13,7 @@ const ASSIGNEE_COLORS = [
   { bg: "#fce7f3", border: "#fbcfe8", text: "#9d174d", avatar: "#db2777" },
 ] as const;
 
-function assigneeColorFor(name: string) {
+function assigneeColorFor(name: string): (typeof ASSIGNEE_COLORS)[number] {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
