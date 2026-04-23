@@ -56,18 +56,36 @@ async function main() {
 
   const databaseUrl = process.env.DATABASE_URL;
   const sql = neon(databaseUrl);
-  const schemaFile = path.resolve(process.cwd(), "db/migrations/20260226_weekplanner_v1.sql");
-  const raw = await fs.readFile(schemaFile, "utf8");
-  const prepared = stripLineComments(raw);
-  const statements = splitStatements(prepared);
 
-  let executed = 0;
-  for (const statement of statements) {
-    await sql.query(statement);
-    executed += 1;
+  const migrationsDir = path.resolve(process.cwd(), "db/migrations");
+  const entries = await fs.readdir(migrationsDir);
+  const sqlFiles = entries
+    .filter((f) => f.endsWith(".sql"))
+    .sort()
+    .map((f) => path.join(migrationsDir, f));
+
+  let totalExecuted = 0;
+  for (const filePath of sqlFiles) {
+    const fileName = path.basename(filePath);
+    const raw = await fs.readFile(filePath, "utf8");
+    const prepared = stripLineComments(raw);
+    const statements = splitStatements(prepared);
+
+    let executed = 0;
+    for (const statement of statements) {
+      try {
+        await sql.query(statement);
+        executed += 1;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`  [skip] ${fileName}: ${msg.split("\n")[0]}`);
+      }
+    }
+    totalExecuted += executed;
+    console.log(`  ${fileName}: ${executed} statements`);
   }
 
-  console.log(`Neon schema klaar. Statements uitgevoerd: ${executed}`);
+  console.log(`\nNeon schema klaar. Totaal statements uitgevoerd: ${totalExecuted}`);
 }
 
 main().catch((error) => {
