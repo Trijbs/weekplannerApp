@@ -486,7 +486,7 @@ function createHourBlockDisplayGroup(block: HourBlock): HourBlockDisplayGroup {
     label: identity?.label || taskLabel || "Los uurblok",
     projectText: block.projectText.trim(),
     taskLabels: taskLabel ? [taskLabel] : [],
-    assignees: block.assignees.filter(Boolean),
+    assignees: block.assignees.filter((a) => a.trim().length > 0),
     timeStart: block.timeStart,
     timeEnd: block.timeEnd,
     totalMinutes: duration,
@@ -539,9 +539,11 @@ function groupHourBlocksForDisplay(blocks: HourBlock[]): HourBlockDisplayGroup[]
     if (taskLabel && !previous.taskLabels.includes(taskLabel)) {
       previous.taskLabels.push(taskLabel);
     }
+    const seenAssignees = new Set(previous.assignees.map((a) => a.toLowerCase()));
     for (const assignee of block.assignees) {
-      if (assignee && !previous.assignees.includes(assignee)) {
+      if (assignee && !seenAssignees.has(assignee.toLowerCase())) {
         previous.assignees.push(assignee);
+        seenAssignees.add(assignee.toLowerCase());
       }
     }
   }
