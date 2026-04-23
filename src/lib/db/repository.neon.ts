@@ -1518,6 +1518,7 @@ export const neonDb: DatabaseRepository = {
         status: input.status ?? match.status,
         position: input.position !== undefined ? input.position : match.position,
         source: "import" as HourBlock["source"],
+        assignees: input.assignees !== undefined ? input.assignees : match.assignees,
       };
 
       const row = await queryOne(
@@ -1534,7 +1535,8 @@ export const neonDb: DatabaseRepository = {
               status = $10,
               position = $11,
               source = $12,
-              updated_at = $13
+              assignees = $13,
+              updated_at = $14
           where id = $1
           returning *
         `,
@@ -1551,6 +1553,7 @@ export const neonDb: DatabaseRepository = {
           next.status,
           next.position,
           next.source,
+          next.assignees,
           nowIso(),
         ],
         "Kan import uurblok niet bijwerken",
