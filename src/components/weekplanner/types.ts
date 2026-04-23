@@ -46,6 +46,7 @@ export type HourBlockDisplayGroup = {
   label: string;
   projectText: string;
   taskLabels: string[];
+  assignees: string[];
   timeStart: string;
   timeEnd: string;
   totalMinutes: number;
