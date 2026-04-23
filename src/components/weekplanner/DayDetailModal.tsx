@@ -4,6 +4,32 @@ import type { DetailTaskFormState, HourBlockDisplayGroup } from "@/components/we
 import type { AppLanguage } from "@/lib/i18n";
 import { translateStatic } from "@/lib/i18n";
 
+const ASSIGNEE_COLORS = [
+  { bg: "#dbeafe", border: "#bfdbfe", text: "#1d4ed8", avatar: "#2563eb" },
+  { bg: "#ede9fe", border: "#ddd6fe", text: "#6d28d9", avatar: "#7c3aed" },
+  { bg: "#d1fae5", border: "#a7f3d0", text: "#065f46", avatar: "#059669" },
+  { bg: "#fee2e2", border: "#fecaca", text: "#991b1b", avatar: "#dc2626" },
+  { bg: "#fef3c7", border: "#fde68a", text: "#92400e", avatar: "#d97706" },
+  { bg: "#fce7f3", border: "#fbcfe8", text: "#9d174d", avatar: "#db2777" },
+] as const;
+
+function assigneeColorFor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return ASSIGNEE_COLORS[hash % ASSIGNEE_COLORS.length];
+}
+
+function assigneeInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .slice(0, 2)
+    .join("");
+}
+
 type DayDetailModalProps = {
   language: AppLanguage;
   weekdayLabels: Record<Weekday, string>;
@@ -335,6 +361,30 @@ export function DayDetailModal({
                         <span className="mt-2 inline-flex rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                           {t("Nu actief")}
                         </span>
+                      ) : null}
+                      {blockGroup.assignees.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {blockGroup.assignees.map((name) => {
+                            const color = assigneeColorFor(name);
+                            return (
+                              <span
+                                key={name}
+                                className="inline-flex items-center gap-1 rounded-full py-0.5 pl-0.5 pr-2"
+                                style={{ background: color.bg, border: `1px solid ${color.border}` }}
+                              >
+                                <span
+                                  className="inline-flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-full text-[7px] font-bold text-white"
+                                  style={{ background: color.avatar }}
+                                >
+                                  {assigneeInitials(name)}
+                                </span>
+                                <span className="text-[10px] font-medium" style={{ color: color.text }}>
+                                  {name}
+                                </span>
+                              </span>
+                            );
+                          })}
+                        </div>
                       ) : null}
                     </article>
                   );
