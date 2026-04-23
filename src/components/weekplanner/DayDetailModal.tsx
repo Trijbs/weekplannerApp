@@ -110,64 +110,59 @@ export function DayDetailModal({
 
         <div className="grid gap-3 p-3 lg:auto-rows-fr lg:grid-cols-3 lg:gap-4 lg:overflow-auto lg:p-6">
           <section className="flex min-h-0 flex-col rounded-xl border border-slate-200 p-3 lg:min-h-[24rem]">
-            <h3 className="text-sm font-semibold text-slate-900">{t("Taken")}</h3>
-            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                  {t("Snelle taak voor")} {weekdayLabels[detailDay]}
-                  {detailDayIso ? ` (${detailDayLabel ?? formatDayDateLabel(detailDayIso)})` : ""}
-                </p>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-white"
-                  onClick={onToggleComposer}
-                >
-                  {detailTaskComposerExpanded ? t("Minder opties") : t("Meer opties")}
-                </button>
-              </div>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-900">{t("Taken")}</h3>
+              <button
+                type="button"
+                className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs text-white hover:bg-slate-700"
+                onClick={onToggleComposer}
+              >
+                {detailTaskComposerExpanded ? t("Annuleer") : t("+ Nieuw")}
+              </button>
+            </div>
 
-              <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.1fr)_minmax(0,1.15fr)_auto]">
-                <input
-                  value={detailTaskForm.title}
-                  className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                  placeholder={t("Nieuwe taak")}
-                  onChange={(event) => onDetailTaskFormChange({ title: event.target.value })}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void onAddTask();
-                    }
-                  }}
-                />
-                <select
-                  value={detailTaskForm.scheduleHint}
-                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                  onChange={(event) => onDetailTaskFormChange({ scheduleHint: event.target.value })}
-                >
-                  <option value="">{t("Beste uren")}</option>
-                  {detailScheduleOptions.map((slot) => (
-                    <option key={`detail-slot-${slot}`} value={slot}>
-                      {slot}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="datetime-local"
-                  value={detailTaskForm.deadlineAt}
-                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                  onChange={(event) => onDetailTaskFormChange({ deadlineAt: event.target.value })}
-                />
-                <button
-                  type="button"
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => void onAddTask()}
-                  disabled={!detailTaskForm.title.trim()}
-                >
-                  {t("Toevoegen")}
-                </button>
-              </div>
-
-              {detailTaskComposerExpanded ? (
+            {detailTaskComposerExpanded ? (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                <div className="grid gap-2 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.1fr)_minmax(0,1.15fr)_auto]">
+                  <input
+                    value={detailTaskForm.title}
+                    className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                    placeholder={t("Nieuwe taak")}
+                    onChange={(event) => onDetailTaskFormChange({ title: event.target.value })}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void onAddTask();
+                      }
+                    }}
+                  />
+                  <select
+                    value={detailTaskForm.scheduleHint}
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                    onChange={(event) => onDetailTaskFormChange({ scheduleHint: event.target.value })}
+                  >
+                    <option value="">{t("Beste uren")}</option>
+                    {detailScheduleOptions.map((slot) => (
+                      <option key={`detail-slot-${slot}`} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="datetime-local"
+                    value={detailTaskForm.deadlineAt}
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                    onChange={(event) => onDetailTaskFormChange({ deadlineAt: event.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => void onAddTask()}
+                    disabled={!detailTaskForm.title.trim()}
+                  >
+                    {t("Toevoegen")}
+                  </button>
+                </div>
                 <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(0,1fr)]">
                   <input
                     value={detailTaskForm.info}
@@ -199,8 +194,8 @@ export function DayDetailModal({
                     ))}
                   </select>
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
 
             <div className="mt-3 flex-1 space-y-2 lg:overflow-y-auto lg:pr-1">
               {detailTasks.length ? (
