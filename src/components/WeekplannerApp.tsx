@@ -2914,8 +2914,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         </button>
       </nav>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="order-2 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-6 lg:order-1">
+      <div className={`mt-4 grid gap-4 ${tab === "thoughts" ? "lg:grid-cols-1" : "lg:grid-cols-[minmax(0,1fr)_320px]"}`}>
+        <section
+          className={`order-2 lg:order-1 ${
+            tab === "thoughts"
+              ? "rounded-2xl border-0 bg-transparent p-0 shadow-none"
+              : "rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm sm:p-6"
+          }`}
+        >
           {!payload ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               {t("Weekgegevens laden...")}
@@ -4249,6 +4255,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           ) : null}
         </section>
 
+        {tab !== "thoughts" ? (
         <aside className="order-1 flex flex-col gap-4 lg:order-2">
           <div className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${dayOverviewCardClass}`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -4427,7 +4434,9 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
             </div>
           </div>
         </aside>
+        ) : null}
 
+        {tab !== "thoughts" ? (
         <div className="order-3 space-y-4 lg:hidden">
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">{t("Historie")}</h2>
@@ -4466,6 +4475,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
             </div>
           </div>
         </div>
+        ) : null}
       </div>
 
       {selectedPlannerDayDetail ? (
