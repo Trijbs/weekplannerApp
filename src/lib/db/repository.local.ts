@@ -30,6 +30,12 @@ import type {
   LocalDatabaseState,
   SessionRecord,
   TaskHistory,
+  ThoughtMessage,
+  ThoughtMessageInput,
+  ThoughtSummary,
+  ThoughtSummaryContent,
+  ThoughtThread,
+  ThoughtThreadInput,
   WeekAggregate,
   WeekRecord,
   Weekday,
@@ -47,6 +53,9 @@ const EMPTY_STATE: LocalDatabaseState = {
   hourEntries: [],
   taskHistory: [],
   importJobs: [],
+  thoughtThreads: [],
+  thoughtMessages: [],
+  thoughtSummaries: [],
 };
 
 const weekdayOrder: Record<Weekday, number> = {
@@ -90,6 +99,9 @@ async function readState(): Promise<LocalDatabaseState> {
       hourEntries: parsed.hourEntries ?? [],
       taskHistory: parsed.taskHistory ?? [],
       importJobs: parsed.importJobs ?? [],
+      thoughtThreads: parsed.thoughtThreads ?? [],
+      thoughtMessages: parsed.thoughtMessages ?? [],
+      thoughtSummaries: parsed.thoughtSummaries ?? [],
     };
   } catch {
     return cloneEmptyState();
@@ -770,6 +782,104 @@ export const localDb: DatabaseRepository = {
 
       const familyIds = equivalentWeekIds(state, week);
       return state.taskHistory.filter((item) => familyIds.has(item.weekId)).slice(0, limit);
+    });
+  },
+
+  async listThoughtThreads(limit = 30): Promise<ThoughtThread[]> {
+    return query((state) =>
+      state.thoughtThreads
+        .slice()
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .slice(0, limit),
+    );
+  },
+
+  async getThoughtThreadById(threadId: string): Promise<ThoughtThread | null> {
+    return query((state) => state.thoughtThreads.find((thread) => thread.id === threadId) ?? null);
+  },
+
+  async createThoughtThread(input: ThoughtThreadInput): Promise<ThoughtThread> {
+    return mutate((state) => {
+      const now = nowIso();
+      const title = input.title?.trim() || "Nieuwe gedachten";
+      const created: ThoughtThread = {
+        id: createId(),
+        weekId: input.weekId ?? null,
+        dayDate: input.dayDate ?? null,
+        title: title.slice(0, 140),
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      state.thoughtThreads.unshift(created);
+      return created;
+    });
+  },
+
+  async listThoughtMessages(threadId: string): Promise<ThoughtMessage[]> {
+    return query((state) =>
+      state.thoughtMessages
+        .filter((message) => message.threadId === threadId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    );
+  },
+
+  async addThoughtMessage(threadId: string, input: ThoughtMessageInput): Promise<ThoughtMessage> {
+    return mutate((state) => {
+      const thread = state.thoughtThreads.find((item) => item.id === threadId);
+      if (!thread) {
+        throw new Error("Gesprek niet gevonden.");
+      }
+
+      const created: ThoughtMessage = {
+        id: createId(),
+        threadId,
+        role: "user",
+        bodyText: input.bodyText.trim(),
+        createdAt: nowIso(),
+      };
+
+      state.thoughtMessages.push(created);
+      thread.updatedAt = created.createdAt;
+      if (thread.title === "Nieuwe gedachten") {
+        thread.title = created.bodyText.split(/\s+/).slice(0, 8).join(" ").slice(0, 140);
+      }
+
+      return created;
+    });
+  },
+
+  async listThoughtSummaries(threadId: string): Promise<ThoughtSummary[]> {
+    return query((state) =>
+      state.thoughtSummaries
+        .filter((summary) => summary.threadId === threadId)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    );
+  },
+
+  async createThoughtSummary(
+    threadId: string,
+    content: ThoughtSummaryContent,
+    messageCount: number,
+  ): Promise<ThoughtSummary> {
+    return mutate((state) => {
+      const thread = state.thoughtThreads.find((item) => item.id === threadId);
+      if (!thread) {
+        throw new Error("Gesprek niet gevonden.");
+      }
+
+      const created: ThoughtSummary = {
+        id: createId(),
+        threadId,
+        content,
+        messageCount,
+        createdAt: nowIso(),
+      };
+
+      state.thoughtSummaries.unshift(created);
+      thread.updatedAt = created.createdAt;
+      return created;
     });
   },
 

@@ -19,6 +19,7 @@ import { PlannerHeader } from "@/components/weekplanner/PlannerHeader";
 import { WeekScrollStrip } from "@/components/weekplanner/WeekScrollStrip";
 import { ProjectCombobox } from "@/components/weekplanner/ProjectCombobox";
 import { AssigneeTagInput } from "@/components/weekplanner/AssigneeTagInput";
+import { ThoughtInbox } from "@/components/weekplanner/ThoughtInbox";
 import {
   getLocale,
   getMonthLabels,
@@ -41,7 +42,7 @@ import {
   mutationFetch,
 } from "@/lib/client/offline-queue";
 
-type Tab = "planner" | "hours" | "blocks" | "past" | "log";
+type Tab = "planner" | "hours" | "blocks" | "past" | "log" | "thoughts";
 
 type DashboardPayload = WeekAggregate & {
   hourSummary: HoursSummary;
@@ -2469,6 +2470,32 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     [activeWeekId, applyLocalMutation, language, loadData, refreshQueueCount, t],
   );
 
+  const createTaskFromThought = useCallback(
+    async (title: string, weekday: Weekday): Promise<boolean> => {
+      if (!payload?.week.id) {
+        setError(language === "en" ? "Week data is not loaded yet." : "Weekgegevens zijn nog niet geladen.");
+        return false;
+      }
+
+      const outcome = await sendMutation(
+        `/api/weeks/${payload.week.id}/tasks`,
+        "POST",
+        {
+          weekday,
+          title,
+          info: "Aangemaakt vanuit gedachten.",
+          priority: "middel",
+          status: "open",
+        },
+        t("Taak toegevoegd."),
+        { localUpdate: true, keepCurrentWeek: false },
+      );
+
+      return outcome.ok && !outcome.queued;
+    },
+    [language, payload?.week.id, sendMutation, t],
+  );
+
   const updateHourBlockDeadlineWithTaskSync = useCallback(
     async (block: HourBlock, localDeadlineValue: string) => {
       const normalizedTask = block.taskText.trim().toLowerCase();
@@ -2878,6 +2905,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         >
           {t("Afgevinkt log")}
         </button>
+        <button
+          type="button"
+          className={`rounded-xl px-4 py-2 text-sm ${tab === "thoughts" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+          onClick={() => setTab("thoughts")}
+        >
+          {t("Gedachten")}
+        </button>
       </nav>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -3077,6 +3111,15 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 </div>
               ) : null}
             </div>
+          ) : null}
+
+          {tab === "thoughts" && payload ? (
+            <ThoughtInbox
+              currentWeek={payload.week}
+              weekdayLabels={weekdayLabels}
+              translate={t}
+              onCreateTask={createTaskFromThought}
+            />
           ) : null}
 
           {tab === "hours" && payload ? (

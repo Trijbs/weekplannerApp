@@ -21,6 +21,12 @@ import type {
   ImportUpsertResult,
   SessionRecord,
   TaskHistory,
+  ThoughtMessage,
+  ThoughtMessageInput,
+  ThoughtSummary,
+  ThoughtSummaryContent,
+  ThoughtThread,
+  ThoughtThreadInput,
   WeekAggregate,
   WeekRecord,
   Weekday,
@@ -277,6 +283,48 @@ function mapImportJob(row: SqlRow): ImportJob {
     detailsJson: parseJsonRecord(row.details_json),
     startedAt: toIsoDateTime(row.started_at),
     finishedAt: row.finished_at ? toIsoDateTime(row.finished_at) : null,
+  };
+}
+
+function mapThoughtThread(row: SqlRow): ThoughtThread {
+  return {
+    id: String(row.id),
+    weekId: row.week_id ? String(row.week_id) : null,
+    dayDate: row.day_date ? toIsoDateOnly(row.day_date) : null,
+    title: String(row.title ?? ""),
+    status: String(row.status ?? "active") as ThoughtThread["status"],
+    createdAt: toIsoDateTime(row.created_at),
+    updatedAt: toIsoDateTime(row.updated_at),
+  };
+}
+
+function mapThoughtMessage(row: SqlRow): ThoughtMessage {
+  return {
+    id: String(row.id),
+    threadId: String(row.thread_id),
+    role: String(row.role ?? "user") as ThoughtMessage["role"],
+    bodyText: String(row.body_text ?? ""),
+    createdAt: toIsoDateTime(row.created_at),
+  };
+}
+
+function parseThoughtSummaryContent(value: unknown): ThoughtSummaryContent {
+  const parsed = parseJsonRecord(value);
+  return {
+    overview: typeof parsed.overview === "string" ? parsed.overview : "",
+    ideas: Array.isArray(parsed.ideas) ? parsed.ideas.map(String) : [],
+    tasks: Array.isArray(parsed.tasks) ? parsed.tasks.map(String) : [],
+    planningNotes: Array.isArray(parsed.planningNotes) ? parsed.planningNotes.map(String) : [],
+  };
+}
+
+function mapThoughtSummary(row: SqlRow): ThoughtSummary {
+  return {
+    id: String(row.id),
+    threadId: String(row.thread_id),
+    content: parseThoughtSummaryContent(row.content_json),
+    messageCount: Number(row.message_count ?? 0),
+    createdAt: toIsoDateTime(row.created_at),
   };
 }
 
@@ -1294,6 +1342,125 @@ export const neonDb: DatabaseRepository = {
     const equivalentWeeks = await fetchEquivalentWeeks(week);
     const familyIds = equivalentWeeks.map((candidate) => candidate.id);
     return fetchWeekHistory(familyIds, limit);
+  },
+
+  async listThoughtThreads(limit = 30): Promise<ThoughtThread[]> {
+    const rows = await queryRows(
+      `select * from thought_threads order by updated_at desc limit $1`,
+      [limit],
+      "Kan gedachten niet laden",
+    );
+
+    return rows.map(mapThoughtThread);
+  },
+
+  async getThoughtThreadById(threadId: string): Promise<ThoughtThread | null> {
+    const row = await queryOne(
+      `select * from thought_threads where id = $1 limit 1`,
+      [threadId],
+      "Kan gesprek niet laden",
+    );
+
+    return row ? mapThoughtThread(row) : null;
+  },
+
+  async createThoughtThread(input: ThoughtThreadInput): Promise<ThoughtThread> {
+    const title = input.title?.trim() || "Nieuwe gedachten";
+    const row = await queryOne(
+      `
+        insert into thought_threads (week_id, day_date, title)
+        values ($1, $2, $3)
+        returning *
+      `,
+      [input.weekId ?? null, input.dayDate ?? null, title.slice(0, 140)],
+      "Kan gesprek niet aanmaken",
+    );
+
+    if (!row) {
+      throw new Error("Kan gesprek niet aanmaken: geen resultaat");
+    }
+
+    return mapThoughtThread(row);
+  },
+
+  async listThoughtMessages(threadId: string): Promise<ThoughtMessage[]> {
+    const rows = await queryRows(
+      `select * from thought_messages where thread_id = $1 order by created_at asc`,
+      [threadId],
+      "Kan gedachtenregels niet laden",
+    );
+
+    return rows.map(mapThoughtMessage);
+  },
+
+  async addThoughtMessage(threadId: string, input: ThoughtMessageInput): Promise<ThoughtMessage> {
+    const row = await queryOne(
+      `
+        insert into thought_messages (thread_id, role, body_text)
+        values ($1, 'user', $2)
+        returning *
+      `,
+      [threadId, input.bodyText.trim()],
+      "Kan gedachte niet opslaan",
+    );
+
+    if (!row) {
+      throw new Error("Kan gedachte niet opslaan: geen resultaat");
+    }
+
+    const created = mapThoughtMessage(row);
+    const thread = await this.getThoughtThreadById(threadId);
+    const title =
+      thread?.title === "Nieuwe gedachten"
+        ? created.bodyText.split(/\s+/).slice(0, 8).join(" ").slice(0, 140)
+        : thread?.title;
+
+    await execute(
+      `update thought_threads set title = coalesce($2, title), updated_at = $3 where id = $1`,
+      [threadId, title ?? null, created.createdAt],
+      "Kan gesprek niet bijwerken",
+    );
+
+    return created;
+  },
+
+  async listThoughtSummaries(threadId: string): Promise<ThoughtSummary[]> {
+    const rows = await queryRows(
+      `select * from thought_summaries where thread_id = $1 order by created_at desc`,
+      [threadId],
+      "Kan samenvattingen niet laden",
+    );
+
+    return rows.map(mapThoughtSummary);
+  },
+
+  async createThoughtSummary(
+    threadId: string,
+    content: ThoughtSummaryContent,
+    messageCount: number,
+  ): Promise<ThoughtSummary> {
+    const row = await queryOne(
+      `
+        insert into thought_summaries (thread_id, content_json, message_count)
+        values ($1, $2::jsonb, $3)
+        returning *
+      `,
+      [threadId, JSON.stringify(content), messageCount],
+      "Kan samenvatting niet opslaan",
+    );
+
+    if (!row) {
+      throw new Error("Kan samenvatting niet opslaan: geen resultaat");
+    }
+
+    const created = mapThoughtSummary(row);
+    await execute(
+      `update thought_threads set updated_at = $2 where id = $1`,
+      [threadId, created.createdAt],
+      "Kan gesprek niet bijwerken",
+    );
+
+    return created;
   },
 
   async upsertImportedData(

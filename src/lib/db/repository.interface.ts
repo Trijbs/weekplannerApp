@@ -16,6 +16,12 @@ import type {
   ImportUpsertResult,
   SessionRecord,
   TaskHistory,
+  ThoughtMessage,
+  ThoughtMessageInput,
+  ThoughtSummary,
+  ThoughtSummaryContent,
+  ThoughtThread,
+  ThoughtThreadInput,
   WeekAggregate,
   WeekRecord,
 } from "@/lib/db/types";
@@ -68,6 +74,17 @@ export interface DatabaseRepository {
   getHoursByWeek(weekId: string): Promise<{ entries: HourEntry[]; summary: HoursSummary }>;
   getHoursSummary(weekId: string): Promise<HoursSummary>;
   listHistory(weekId: string, limit?: number): Promise<TaskHistory[]>;
+  listThoughtThreads(limit?: number): Promise<ThoughtThread[]>;
+  getThoughtThreadById(threadId: string): Promise<ThoughtThread | null>;
+  createThoughtThread(input: ThoughtThreadInput): Promise<ThoughtThread>;
+  listThoughtMessages(threadId: string): Promise<ThoughtMessage[]>;
+  addThoughtMessage(threadId: string, input: ThoughtMessageInput): Promise<ThoughtMessage>;
+  listThoughtSummaries(threadId: string): Promise<ThoughtSummary[]>;
+  createThoughtSummary(
+    threadId: string,
+    content: ThoughtSummaryContent,
+    messageCount: number,
+  ): Promise<ThoughtSummary>;
   upsertImportedData(
     weekId: string,
     payload: { tasks: DayTaskInput[]; hourBlocks: HourBlockInput[] },

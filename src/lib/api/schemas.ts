@@ -84,3 +84,13 @@ export const weekUpsertSchema = z.object({
 export const importSyncSchema = z.object({
   force: z.boolean().optional().default(false),
 });
+
+export const thoughtThreadCreateSchema = z.object({
+  weekId: z.string().min(1).nullable().optional().default(null),
+  dayDate: z.string().date().nullable().optional().default(null),
+  title: z.string().max(140).optional().default(""),
+});
+
+export const thoughtMessageCreateSchema = z.object({
+  bodyText: z.string().min(1).max(8000),
+});
