@@ -133,6 +133,39 @@ export interface ImportJob {
   finishedAt: string | null;
 }
 
+export interface ThoughtThread {
+  id: string;
+  weekId: string | null;
+  dayDate: string | null;
+  title: string;
+  status: "active" | "archived";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ThoughtMessage {
+  id: string;
+  threadId: string;
+  role: "user" | "assistant";
+  bodyText: string;
+  createdAt: string;
+}
+
+export interface ThoughtSummaryContent {
+  overview: string;
+  ideas: string[];
+  tasks: string[];
+  planningNotes: string[];
+}
+
+export interface ThoughtSummary {
+  id: string;
+  threadId: string;
+  content: ThoughtSummaryContent;
+  messageCount: number;
+  createdAt: string;
+}
+
 export interface LocalDatabaseState {
   appSettings: AppSettings | null;
   sessions: SessionRecord[];
@@ -143,6 +176,9 @@ export interface LocalDatabaseState {
   hourEntries: HourEntry[];
   taskHistory: TaskHistory[];
   importJobs: ImportJob[];
+  thoughtThreads: ThoughtThread[];
+  thoughtMessages: ThoughtMessage[];
+  thoughtSummaries: ThoughtSummary[];
 }
 
 export interface WeekAggregate {
@@ -203,6 +239,16 @@ export interface HourEntryInput {
 
 export interface HourEntryPatch extends Partial<HourEntryInput> {
   weekId?: string;
+}
+
+export interface ThoughtThreadInput {
+  weekId?: string | null;
+  dayDate?: string | null;
+  title?: string;
+}
+
+export interface ThoughtMessageInput {
+  bodyText: string;
 }
 
 export interface ImportUpsertResult {
