@@ -185,59 +185,69 @@ export function ThoughtInbox({
   }, [detail?.messages.length, t]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-      <aside className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-900">{t("Gesprekken")}</h2>
-          <button
-            type="button"
-            className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs text-white"
-            onClick={() => void createThread().catch((createError) => {
-              setError(createError instanceof Error ? createError.message : t("Gesprek aanmaken mislukt."));
-            })}
-          >
-            {t("Nieuw")}
-          </button>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">{t("Gedachten")}</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+            {t("Schrijf alles eerst op één plek. De samenvatting maakt er daarna ideeën, acties en planningpunten van.")}
+          </p>
         </div>
-        <div className="mt-3 space-y-2">
-          {threads.length ? threads.map((thread) => (
-            <button
-              key={thread.id}
-              type="button"
-              className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
-                thread.id === activeThreadId
-                  ? "bg-slate-900 text-white"
-                  : "bg-white text-slate-700 hover:bg-slate-100"
-              }`}
-              onClick={() => setActiveThreadId(thread.id)}
-            >
-              <span className="block truncate font-medium">
-                {thread.title === "Nieuwe gedachten" ? t("Nieuwe gedachten") : thread.title || t("Zonder titel")}
-              </span>
-              <span className={`mt-1 block text-xs ${thread.id === activeThreadId ? "text-slate-200" : "text-slate-500"}`}>
-                {formatShortDate(thread.updatedAt)}
-              </span>
-            </button>
-          )) : (
-            <p className="rounded-lg bg-white px-3 py-2 text-sm text-slate-500">
-              {t("Nog geen gesprekken.")}
-            </p>
-          )}
-        </div>
-      </aside>
+        <button
+          type="button"
+          className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          onClick={() => void createThread().catch((createError) => {
+            setError(createError instanceof Error ? createError.message : t("Gesprek aanmaken mislukt."));
+          })}
+        >
+          {t("Nieuw gesprek")}
+        </button>
+      </div>
 
-      <div className="space-y-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">
-                {detail?.thread.title === "Nieuwe gedachten" ? t("Nieuwe gedachten") : detail?.thread.title || t("Gedachten")}
-              </h2>
+      <div className="grid lg:grid-cols-[230px_minmax(0,1fr)_360px]">
+        <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Gesprekken")}</h3>
+            <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-500">{threads.length}</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {threads.length ? threads.map((thread) => (
+              <button
+                key={thread.id}
+                type="button"
+                className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition ${
+                  thread.id === activeThreadId
+                    ? "border-blue-300 bg-blue-50 text-slate-950"
+                    : "border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-100"
+                }`}
+                onClick={() => setActiveThreadId(thread.id)}
+              >
+                <span className="block truncate font-semibold">
+                  {thread.title === "Nieuwe gedachten" ? t("Nieuwe gedachten") : thread.title || t("Zonder titel")}
+                </span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  {formatShortDate(thread.updatedAt)}
+                </span>
+              </button>
+            )) : (
+              <p className="rounded-xl border border-dashed border-slate-300 bg-white px-3 py-3 text-sm leading-5 text-slate-500">
+                {t("Nog geen gesprekken. Begin met een losse gedachte.")}
+              </p>
+            )}
+          </div>
+        </aside>
+
+        <section className="min-w-0 border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="truncate text-base font-semibold text-slate-950">
+                {detail?.thread.title === "Nieuwe gedachten" ? t("Nieuwe gedachten") : detail?.thread.title || t("Schrijf alles op")}
+              </h3>
               <p className="mt-1 text-xs text-slate-500">{messageCountLabel}</p>
             </div>
             <button
               type="button"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!detail?.messages.length || summarizing}
               onClick={() => void summarize()}
             >
@@ -245,24 +255,11 @@ export function ThoughtInbox({
             </button>
           </div>
 
-          <div className="mt-4 space-y-2">
-            {detail?.messages.length ? detail.messages.map((message) => (
-              <div key={message.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                <p className="whitespace-pre-wrap text-sm text-slate-800">{message.bodyText}</p>
-                <p className="mt-2 text-xs text-slate-500">{formatShortDate(message.createdAt)}</p>
-              </div>
-            )) : (
-              <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
-                {t("Schrijf losse gedachten, ideeën of dingen die je niet wilt vergeten.")}
-              </p>
-            )}
-          </div>
-
-          <div className="mt-4">
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white">
             <textarea
               value={draft}
-              rows={5}
-              className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              rows={6}
+              className="block min-h-36 w-full resize-y rounded-t-2xl border-0 px-4 py-3 text-sm leading-6 text-slate-800 outline-none placeholder:text-slate-400"
               placeholder={t("Schrijf hier je gedachte, idee, taak of planning-notitie...")}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
@@ -272,41 +269,78 @@ export function ThoughtInbox({
                 }
               }}
             />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-slate-500">{t("Cmd/Ctrl + Enter om op te slaan.")}</p>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-3 py-3">
+              <span className="text-xs text-slate-500">{t("Automatisch samenvatten na opslaan")}</span>
               <button
                 type="button"
-                className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={!draft.trim() || busy}
                 onClick={() => void saveThought()}
               >
-                {busy ? t("Opslaan...") : t("Gedachte opslaan")}
+                {busy ? t("Opslaan...") : t("Opslaan")}
               </button>
             </div>
           </div>
-        </div>
 
-        {latestSummary ? (
-          <section className="rounded-xl border border-blue-200 bg-blue-50/50 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-slate-900">{t("Laatste samenvatting")}</h2>
-              <span className="text-xs text-slate-500">
-                {latestSummary.messageCount} {t("berichten")} · {formatShortDate(latestSummary.createdAt)}
-              </span>
+          <div className="mt-4 space-y-2">
+            {detail?.messages.length ? detail.messages.map((message) => (
+              <article key={message.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <p className="whitespace-pre-wrap text-sm leading-6 text-slate-800">{message.bodyText}</p>
+                <p className="mt-2 text-xs text-slate-500">{formatShortDate(message.createdAt)}</p>
+              </article>
+            )) : (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                <h4 className="text-sm font-semibold text-slate-800">{t("Waar is dit voor?")}</h4>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {t("Gebruik dit als tijdelijke plek voor ideeën, zorgen, taken en dagplanning voordat ze in je planner terechtkomen.")}
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <aside className="bg-blue-50/40 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">{t("Samenvatting")}</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                {t("Herschreven naar kern, acties, ideeën en planning.")}
+              </p>
             </div>
-            <p className="mt-3 text-sm text-slate-700">{latestSummary.content.overview}</p>
+            {latestSummary ? (
+              <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-500">
+                {latestSummary.messageCount} {t("berichten")}
+              </span>
+            ) : null}
+          </div>
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <SummaryList title={t("Ideeën")} items={latestSummary.content.ideas} emptyText={t("Geen ideeën gevonden.")} />
-              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Taken")}</h3>
+          {latestSummary ? (
+            <div className="mt-4 space-y-3">
+              <section className="rounded-2xl border border-blue-200 bg-white p-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-700">{t("Kern")}</h4>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{latestSummary.content.overview}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                    {latestSummary.content.tasks.length} {t("acties")}
+                  </span>
+                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                    {latestSummary.content.ideas.length} {t("ideeën")}
+                  </span>
+                  <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+                    {latestSummary.content.planningNotes.length} {t("planningpunten")}
+                  </span>
+                </div>
+              </section>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Acties")}</h4>
                 <div className="mt-2 space-y-2">
                   {latestSummary.content.tasks.length ? latestSummary.content.tasks.map((item) => (
-                    <div key={item} className="rounded-lg bg-slate-50 p-2">
-                      <p className="text-sm text-slate-700">{item}</p>
+                    <div key={item} className="rounded-xl bg-slate-50 p-2.5">
+                      <p className="text-sm leading-5 text-slate-800">{item}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <select
-                          className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
                           value={taskDay}
                           onChange={(event) => setTaskDay(event.target.value as Weekday)}
                         >
@@ -318,7 +352,7 @@ export function ThoughtInbox({
                         </select>
                         <button
                           type="button"
-                          className="rounded-lg bg-slate-900 px-2 py-1 text-xs text-white disabled:opacity-50"
+                          className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
                           disabled={promotingTask === item}
                           onClick={() => {
                             setPromotingTask(item);
@@ -334,20 +368,39 @@ export function ThoughtInbox({
                   )}
                 </div>
               </div>
+
+              <SummaryList title={t("Ideeën")} items={latestSummary.content.ideas} emptyText={t("Geen ideeën gevonden.")} />
               <SummaryList
                 title={t("Voor dagplanning")}
                 items={latestSummary.content.planningNotes}
                 emptyText={t("Geen planning-notities gevonden.")}
               />
             </div>
-          </section>
-        ) : null}
+          ) : (
+            <div className="mt-4 space-y-3">
+              <div className="rounded-2xl border border-dashed border-blue-200 bg-white p-4">
+                <h4 className="text-sm font-semibold text-slate-800">{t("Nog geen samenvatting")}</h4>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  {t("Sla een gedachte op en ik maak automatisch een compacte samenvatting met acties en ideeën.")}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Voorbeeld output")}</h4>
+                <ul className="mt-2 space-y-2 text-sm leading-5 text-slate-600">
+                  <li className="rounded-xl bg-slate-50 p-2">{t("Kern: waar gaan je notities echt over?")}</li>
+                  <li className="rounded-xl bg-slate-50 p-2">{t("Acties: wat kan direct naar de planner?")}</li>
+                  <li className="rounded-xl bg-slate-50 p-2">{t("Ideeën: wat wil je bewaren zonder planningdruk?")}</li>
+                </ul>
+              </div>
+            </div>
+          )}
 
-        {error ? (
-          <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
+          {error ? (
+            <div className="mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
+        </aside>
       </div>
     </div>
   );
