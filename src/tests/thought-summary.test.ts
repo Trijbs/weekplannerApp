@@ -36,9 +36,9 @@ describe("summarizeThoughtMessages", () => {
       message("Ik moet morgen de dagplanning afmaken en de klant mailen."),
     ]);
 
-    expect(summary.overview).toContain("inbox");
-    expect(summary.ideas).toEqual(["Idee: misschien een inbox maken voor losse gedachten."]);
-    expect(summary.tasks).toEqual(["Ik moet morgen de dagplanning afmaken en de klant mailen."]);
-    expect(summary.planningNotes).toEqual(["Ik moet morgen de dagplanning afmaken en de klant mailen."]);
+    expect(summary.overview).toContain("Kern:");
+    expect(summary.ideas).toEqual(["Idee: Een inbox maken voor losse gedachten."]);
+    expect(summary.tasks).toEqual(["Actie: Morgen de dagplanning afmaken en de klant mailen."]);
+    expect(summary.planningNotes).toEqual(["Planning: Morgen de dagplanning afmaken en de klant mailen."]);
   });
 });
