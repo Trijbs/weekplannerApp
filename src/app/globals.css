@@ -13,6 +13,7 @@
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -57,5 +58,33 @@ a {
   select,
   textarea {
     font-size: 16px;
+  }
+
+  /* Safe area insets for notch/Dynamic Island/home indicator */
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Use dynamic viewport height so content fills screen when Safari toolbar hides */
+  .min-h-screen {
+    min-height: 100dvh;
+  }
+
+  /* Minimum touch target size per Apple HIG */
+  button,
+  [role="button"],
+  [type="button"],
+  [type="submit"] {
+    min-height: 44px;
+  }
+
+  /* Smooth momentum scrolling on overflow containers */
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
   }
 }
