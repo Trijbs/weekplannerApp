@@ -1098,6 +1098,18 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     return () => window.clearInterval(timer);
   }, []);
 
+  // Keep queue count in sync: poll every 3 s when online, and refresh on tab focus
+  useEffect(() => {
+    const tick = () => { if (navigator.onLine) void refreshQueueCount(); };
+    const onVisible = () => { if (document.visibilityState === "visible") void refreshQueueCount(); };
+    const timer = window.setInterval(tick, 3_000);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refreshQueueCount]);
+
   useEffect(() => {
     const updateNow = () => setLiveNowAmsterdam(nowLabelForTimezone("Europe/Amsterdam", locale));
     updateNow();
