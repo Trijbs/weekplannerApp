@@ -86,8 +86,14 @@ export function buildGoogleDriveConnectUrl(
   };
 }
 
+function fetchWithTimeout(url: string | URL, init: RequestInit = {}, timeoutMs = 30_000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 async function tokenRequest(params: URLSearchParams): Promise<Record<string, unknown>> {
-  const response = await fetch(TOKEN_URL, {
+  const response = await fetchWithTimeout(TOKEN_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -172,11 +178,16 @@ async function refreshAccessToken(): Promise<string> {
     throw new Error("Geen access token ontvangen bij refresh.");
   }
 
+  // Google occasionally rotates the refresh token — save the new one if present
+  const newRefreshToken = typeof payload.refresh_token === "string" && payload.refresh_token
+    ? payload.refresh_token
+    : null;
+
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
   await db.saveDriveConnection({
     provider: "google-drive",
     accessTokenEnc: encryptValue(accessToken),
-    refreshTokenEnc: connection.refreshTokenEnc,
+    refreshTokenEnc: newRefreshToken ? encryptValue(newRefreshToken) : connection.refreshTokenEnc,
     expiresAt,
     folderId: connection.folderId,
   });
@@ -192,21 +203,34 @@ export async function listCandidateFiles(): Promise<DriveFileMeta[]> {
 
   const accessToken = await refreshAccessToken();
   const query = `'${connection.folderId}' in parents and trashed=false and (mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='text/csv')`;
-  const url = new URL("https://www.googleapis.com/drive/v3/files");
-  url.searchParams.set("q", query);
-  url.searchParams.set("fields", "files(id,name,modifiedTime,mimeType)");
-  url.searchParams.set("orderBy", "modifiedTime desc");
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  const allFiles: DriveFileMeta[] = [];
+  let pageToken: string | undefined;
 
-  const payload = (await response.json()) as { files?: DriveFileMeta[] };
-  if (!response.ok) {
-    throw new Error(`Drive lijst ophalen mislukt: ${JSON.stringify(payload)}`);
-  }
+  do {
+    const url = new URL("https://www.googleapis.com/drive/v3/files");
+    url.searchParams.set("q", query);
+    url.searchParams.set("fields", "nextPageToken,files(id,name,modifiedTime,mimeType)");
+    url.searchParams.set("orderBy", "modifiedTime desc");
+    url.searchParams.set("pageSize", "100");
+    if (pageToken) {
+      url.searchParams.set("pageToken", pageToken);
+    }
 
-  return (payload.files ?? []).filter(
+    const response = await fetchWithTimeout(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    const payload = (await response.json()) as { files?: DriveFileMeta[]; nextPageToken?: string };
+    if (!response.ok) {
+      throw new Error(`Drive lijst ophalen mislukt: ${JSON.stringify(payload)}`);
+    }
+
+    allFiles.push(...(payload.files ?? []));
+    pageToken = payload.nextPageToken;
+  } while (pageToken);
+
+  return allFiles.filter(
     (file) =>
       /weekplanning/i.test(file.name) ||
       /weekplanner/i.test(file.name) ||
@@ -219,7 +243,7 @@ export async function downloadDriveFile(fileId: string): Promise<Buffer> {
   const accessToken = await refreshAccessToken();
   const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 

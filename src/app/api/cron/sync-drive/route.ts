@@ -1,6 +1,9 @@
 import { ok, fail, parseError } from "@/lib/api/http";
 import { syncGoogleDrive } from "@/lib/import/sync";
 
+// Give the sync enough time to download and parse files on Vercel
+export const maxDuration = 60;
+
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
