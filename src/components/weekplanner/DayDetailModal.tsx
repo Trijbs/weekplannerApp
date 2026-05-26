@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { formatIsoToLocalInput } from "@/lib/db/helpers";
 import type { DayTask, HourEntry, Weekday } from "@/lib/db/types";
 import type { DetailTaskFormState, HourBlockDisplayGroup } from "@/components/weekplanner/types";
@@ -19,6 +20,18 @@ function assigneeColorFor(name: string): (typeof ASSIGNEE_COLORS)[number] {
     hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   }
   return ASSIGNEE_COLORS[hash % ASSIGNEE_COLORS.length];
+}
+
+function priorityBorderClass(priority: string): string {
+  if (priority === "hoog") return "border-l-4 border-l-red-400";
+  if (priority === "middel") return "border-l-4 border-l-amber-400";
+  return "border-l-4 border-l-slate-300";
+}
+
+function statusBadgeClass(status: string): string {
+  if (status === "klaar") return "bg-green-100 text-green-700";
+  if (status === "bezig") return "bg-blue-100 text-blue-700";
+  return "bg-slate-100 text-slate-500";
 }
 
 function assigneeInitials(name: string): string {
@@ -98,6 +111,27 @@ export function DayDetailModal({
   onTaskDelete,
 }: DayDetailModalProps) {
   const t = (text: string) => translateStatic(language, text);
+
+  // Two-step delete confirmation
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDeleteClick = (taskId: string) => {
+    if (pendingDeleteId === taskId) {
+      // Second click — confirm
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+      setPendingDeleteId(null);
+      void onTaskDelete(taskId);
+    } else {
+      // First click — arm
+      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
+      setPendingDeleteId(taskId);
+      deleteTimerRef.current = setTimeout(() => setPendingDeleteId(null), 2000);
+    }
+  };
+
+  useEffect(() => () => { if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }, []);
+
   const summary =
     language === "en"
       ? `Tasks ${detailDoneCount}/${detailTasks.length} done • Time blocks ${detailHourBlocksCount} • Hours ${detailHoursTotal}h`
@@ -227,7 +261,10 @@ export function DayDetailModal({
             <div className="mt-3 flex-1 space-y-2 lg:overflow-y-auto lg:pr-1">
               {detailTasks.length ? (
                 detailTasks.map((task) => (
-                  <article key={task.id} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
+                  <article
+                    key={task.id}
+                    className={`rounded-lg border border-slate-100 bg-slate-50 p-2 ${priorityBorderClass(task.priority)} overflow-hidden`}
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <label className="flex items-center gap-2 text-xs text-slate-700">
                         <input
@@ -247,19 +284,29 @@ export function DayDetailModal({
                         />
                         {language === "en" ? "Mark done" : "Afvinken"}
                       </label>
-                      <button
-                        type="button"
-                        className="text-xs text-red-600"
-                        onClick={() => void onTaskDelete(task.id)}
-                      >
-                        {t("Verwijder")}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadgeClass(task.status)}`}>
+                          {task.status === "klaar" ? t("Klaar") : task.status === "bezig" ? t("Bezig") : t("Open")}
+                        </span>
+                        <button
+                          type="button"
+                          className={`rounded px-2 py-0.5 text-xs transition-colors ${
+                            pendingDeleteId === task.id
+                              ? "animate-pulse bg-red-100 font-semibold text-red-600"
+                              : "text-slate-400 hover:text-red-500"
+                          }`}
+                          onClick={() => handleDeleteClick(task.id)}
+                          title={pendingDeleteId === task.id ? (language === "en" ? "Click again to confirm" : "Nogmaals klikken om te bevestigen") : undefined}
+                        >
+                          {pendingDeleteId === task.id ? (language === "en" ? "Confirm?" : "Zeker?") : t("Verwijder")}
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-2 space-y-2">
                       <input
                         key={`${task.id}-${task.updatedAt}-detail-title`}
                         defaultValue={task.title}
-                        className={`w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm ${
+                        className={`w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm outline-none transition-colors focus:border-amber-400 focus:ring-1 focus:ring-amber-300 ${
                           task.status === "klaar" ? "text-slate-400 line-through" : "text-slate-800"
                         }`}
                         onBlur={(event) =>
@@ -273,7 +320,7 @@ export function DayDetailModal({
                       <input
                         key={`${task.id}-${task.updatedAt}-detail-info`}
                         defaultValue={task.info}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 outline-none transition-colors focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
                         placeholder={t("Info")}
                         onBlur={(event) =>
                           void onTaskPatch(
@@ -287,7 +334,7 @@ export function DayDetailModal({
                         <select
                           key={`${task.id}-${task.updatedAt}-detail-priority`}
                           defaultValue={task.priority}
-                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm outline-none transition-colors focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
                           onChange={(event) =>
                             void onTaskPatch(
                               task.id,
@@ -304,7 +351,7 @@ export function DayDetailModal({
                           key={`${task.id}-${task.updatedAt}-detail-deadline`}
                           type="datetime-local"
                           defaultValue={formatIsoToLocalInput(task.deadlineAt)}
-                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm outline-none transition-colors focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
                           onBlur={(event) =>
                             void onTaskPatch(
                               task.id,
@@ -323,7 +370,11 @@ export function DayDetailModal({
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">{t("Geen taken voor deze dag.")}</p>
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                  <span className="text-2xl">📋</span>
+                  <p className="text-sm font-medium text-slate-600">{t("Geen taken voor deze dag.")}</p>
+                  <p className="text-xs text-slate-400">{language === "en" ? "Add one with + New above" : "Voeg er een toe via + Nieuw"}</p>
+                </div>
               )}
             </div>
           </section>
@@ -342,7 +393,9 @@ export function DayDetailModal({
                     <article
                       key={blockGroup.key}
                       className={`rounded-lg border p-2.5 transition-colors ${
-                        isActiveNow ? "border-blue-300 bg-blue-50 ring-2 ring-blue-200" : "border-slate-100 bg-slate-50"
+                        isActiveNow
+                          ? "border-l-4 border-green-400 border-t-green-200 border-r-green-200 border-b-green-200 bg-green-50 ring-1 ring-green-200"
+                          : "border-slate-100 bg-slate-50"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -358,7 +411,8 @@ export function DayDetailModal({
                         {blockGroup.taskLabels.length > 1 ? ` • ${blockGroup.taskLabels.join(", ")}` : ""}
                       </p>
                       {isActiveNow ? (
-                        <span className="mt-2 inline-flex rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        <span className="mt-2 inline-flex animate-pulse items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
                           {t("Nu actief")}
                         </span>
                       ) : null}
@@ -390,7 +444,11 @@ export function DayDetailModal({
                   );
                 })
               ) : (
-                <p className="text-sm text-slate-500">{t("Geen uurblokken voor deze dag.")}</p>
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                  <span className="text-2xl">🕐</span>
+                  <p className="text-sm font-medium text-slate-600">{t("Geen uurblokken voor deze dag.")}</p>
+                  <p className="text-xs text-slate-400">{language === "en" ? "Schedule blocks in the Blocks tab" : "Plan blokken via het Uurblokken-tabblad"}</p>
+                </div>
               )}
             </div>
           </section>
@@ -408,9 +466,13 @@ export function DayDetailModal({
                   </article>
                 ))
               ) : (
-                <p className="text-sm text-slate-500">
-                  {language === "en" ? "No time entries for this day." : "Geen urenregistratie voor deze dag."}
-                </p>
+                <div className="flex flex-col items-center gap-2 py-8 text-center">
+                  <span className="text-2xl">⏱️</span>
+                  <p className="text-sm font-medium text-slate-600">
+                    {language === "en" ? "No time entries for this day." : "Geen urenregistratie voor deze dag."}
+                  </p>
+                  <p className="text-xs text-slate-400">{language === "en" ? "Log hours in the Hours tab" : "Registreer uren via het Uren-tabblad"}</p>
+                </div>
               )}
             </div>
           </section>

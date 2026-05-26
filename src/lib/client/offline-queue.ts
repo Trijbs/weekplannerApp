@@ -70,14 +70,20 @@ function formatApiErrorMessage(payload: ApiErrorPayload): string {
 }
 
 export async function flushMutationQueue(): Promise<{ sent: number; failed: number }> {
-  const db = await dbPromise();
-  const tx = db.transaction(STORE_NAME, "readwrite");
-  const store = tx.objectStore(STORE_NAME);
-  const all = await store.getAll();
+  const database = await dbPromise();
+
+  // Read all queued mutations in a short-lived readonly transaction.
+  const all = await database.getAll(STORE_NAME);
 
   let sent = 0;
   let failed = 0;
+  const successfulIds: number[] = [];
 
+  // Perform network requests outside of any IDB transaction.
+  // IDB transactions auto-commit when no requests are pending and the event
+  // loop yields — which happens on every `await fetch()`.  Keeping the
+  // transaction open across fetches caused the delete calls to run on an
+  // already-committed transaction, so queued items were never removed.
   for (const item of all) {
     try {
       const response = await fetch(item.url, {
@@ -95,7 +101,7 @@ export async function flushMutationQueue(): Promise<{ sent: number; failed: numb
       }
 
       if (item.id != null) {
-        await store.delete(item.id);
+        successfulIds.push(item.id);
       }
       sent += 1;
     } catch {
@@ -103,7 +109,16 @@ export async function flushMutationQueue(): Promise<{ sent: number; failed: numb
     }
   }
 
-  await tx.done;
+  // Delete all successfully-sent mutations in a single new transaction.
+  if (successfulIds.length > 0) {
+    const deleteTx = database.transaction(STORE_NAME, "readwrite");
+    const store = deleteTx.objectStore(STORE_NAME);
+    for (const id of successfulIds) {
+      void store.delete(id);
+    }
+    await deleteTx.done;
+  }
+
   return { sent, failed };
 }
 

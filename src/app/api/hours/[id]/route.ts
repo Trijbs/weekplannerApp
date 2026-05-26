@@ -71,12 +71,17 @@ export async function DELETE(
 
     const params = "then" in context.params ? await context.params : context.params;
 
+    const existing = await db.getHourEntryById(params.id);
+    if (!existing) {
+      return fail("Urenregel niet gevonden.", 404);
+    }
+
     const deleted = await db.deleteHourEntry(params.id, "user");
     if (!deleted) {
       return fail("Urenregel niet gevonden.", 404);
     }
 
-    return ok({ deleted: true });
+    return ok({ deleted: true, weekId: existing.weekId });
   } catch (error) {
     return parseError(error);
   }

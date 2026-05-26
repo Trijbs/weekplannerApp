@@ -899,6 +899,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     priority: "middel",
   });
   const [detailTaskComposerExpanded, setDetailTaskComposerExpanded] = useState(false);
+  const [showMoreTaskOptions, setShowMoreTaskOptions] = useState(false);
 
   const [hourForm, setHourForm] = useState(() => {
     const dayDate = todayIsoForTimezone("Europe/Amsterdam");
@@ -1753,7 +1754,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         const bStart = weekMetaById.get(b.weekId)?.startDate ?? b.dayDate;
         return bStart.localeCompare(aStart) || b.dayDate.localeCompare(a.dayDate);
       });
-  }, [allHourEntries, weekMetaById]);
+  }, [filteredHourEntries, weekMetaById]);
   const visibleHoursSummary = useMemo(() => {
     const projectTotals = new Map<string, number>();
     const weekTotals = new Map<string, { weekId: string; weekLabel: string; totalHours: number; startDate: string }>();
@@ -1785,7 +1786,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         (a, b) => a.startDate.localeCompare(b.startDate) || a.weekLabel.localeCompare(b.weekLabel, "nl"),
       ),
     };
-  }, [allHourEntries, weekMetaById]);
+  }, [filteredHourEntries, weekMetaById]);
   useEffect(() => {
     const validIds = new Set(allHourEntries.map((entry) => entry.id));
 
@@ -2742,10 +2743,35 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   };
 
   if (busy && !pinStatus) {
+    const dayLetters = language === "en" ? ["M", "T", "W", "T", "F"] : ["M", "D", "W", "D", "V"];
+    const barHeights = [36, 52, 64, 48, 32];
     return (
       <div className="mx-auto flex min-h-screen w-full max-w-4xl items-center justify-center px-4 py-16">
-        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-4 text-slate-700 shadow-sm">
-          {language === "en" ? "Loading..." : "Laden..."}
+        <div className="flex flex-col items-center gap-8">
+          {/* Five animated day-columns, like a mini week being built */}
+          <div className="flex items-end gap-2">
+            {dayLetters.map((letter, i) => (
+              <div key={i} className="flex flex-col items-center gap-1.5">
+                <div
+                  className="w-10 rounded-t-xl bg-slate-900 animate-pulse"
+                  style={{
+                    height: `${barHeights[i]}px`,
+                    animationDelay: `${i * 0.18}s`,
+                    animationDuration: "1.4s",
+                  }}
+                />
+                <span
+                  className="text-xs font-semibold text-slate-400"
+                  style={{ opacity: 0.4 + i * 0.12 }}
+                >
+                  {letter}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-sm font-medium tracking-wide text-slate-500">
+            {language === "en" ? "Loading your week…" : "Je week laden…"}
+          </p>
         </div>
       </div>
     );
@@ -2869,38 +2895,38 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         />
       </div>
 
-      <nav className="mt-4 grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+      <nav className="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <button
           type="button"
-          className={`rounded-xl px-4 py-2 text-sm ${tab === "planner" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+          className={`shrink-0 rounded-xl px-4 py-2 text-sm whitespace-nowrap ${tab === "planner" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           onClick={() => setTab("planner")}
         >
           {t("Week planner")}
         </button>
         <button
           type="button"
-          className={`rounded-xl px-4 py-2 text-sm ${tab === "hours" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+          className={`shrink-0 rounded-xl px-4 py-2 text-sm whitespace-nowrap ${tab === "hours" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           onClick={() => setTab("hours")}
         >
           {t("Urenregistratie")}
         </button>
         <button
           type="button"
-          className={`rounded-xl px-4 py-2 text-sm ${tab === "blocks" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+          className={`shrink-0 rounded-xl px-4 py-2 text-sm whitespace-nowrap ${tab === "blocks" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           onClick={() => setTab("blocks")}
         >
           {t("Uurblokken")}
         </button>
         <button
           type="button"
-          className={`rounded-xl px-4 py-2 text-sm ${tab === "past" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+          className={`shrink-0 rounded-xl px-4 py-2 text-sm whitespace-nowrap ${tab === "past" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           onClick={() => setTab("past")}
         >
           {t("Verlopen dagen")}
         </button>
         <button
           type="button"
-          className={`rounded-xl px-4 py-2 text-sm ${tab === "log" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}
+          className={`shrink-0 rounded-xl px-4 py-2 text-sm whitespace-nowrap ${tab === "log" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           onClick={() => setTab("log")}
         >
           {t("Afgevinkt log")}
@@ -2929,9 +2955,10 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           ) : null}
           {tab === "planner" && payload ? (
             <div className="space-y-6">
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Task form — primary row always visible */}
+              <div className="flex flex-wrap gap-2">
                 <select
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
                   value={taskForm.weekday}
                   onChange={(event) => setTaskForm((prev) => ({ ...prev, weekday: event.target.value as Weekday }))}
                 >
@@ -2942,47 +2969,31 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   ))}
                 </select>
                 <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
                   placeholder={t("Taaktitel")}
                   value={taskForm.title}
                   onChange={(event) => setTaskForm((prev) => ({ ...prev, title: event.target.value }))}
                 />
-                <input
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  placeholder={t("Info")}
-                  value={taskForm.info}
-                  onChange={(event) => setTaskForm((prev) => ({ ...prev, info: event.target.value }))}
-                />
-                <input
-                  type="datetime-local"
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  value={taskForm.deadlineAt}
-                  onChange={(event) => setTaskForm((prev) => ({ ...prev, deadlineAt: event.target.value }))}
-                />
-                <select
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  value={taskDeadlineTimeValue}
-                  onChange={(event) => applyTaskDeadlineTime(event.target.value)}
-                >
-                  <option value="">{t("Sneltijd deadline")}</option>
-                  {TIME_OPTIONS.map((time) => (
-                    <option key={`task-deadline-${time}`} value={time}>
-                      {time}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  value={taskForm.priority}
-                  onChange={(event) => setTaskForm((prev) => ({ ...prev, priority: event.target.value }))}
-                >
-                  <option value="hoog">{t("Hoog")}</option>
-                  <option value="middel">{t("Middel")}</option>
-                  <option value="laag">{t("Laag")}</option>
-                </select>
                 <button
                   type="button"
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-500 hover:bg-slate-50"
+                  onClick={() => setShowMoreTaskOptions((v) => !v)}
+                  title={showMoreTaskOptions ? t("Minder opties") : t("Meer opties")}
+                >
+                  <svg
+                    className={`h-4 w-4 transition-transform duration-200 ${showMoreTaskOptions ? "rotate-45" : ""}`}
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  >
+                    <path d="M8 3v10M3 8h10" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                   disabled={!plannerDayOptions.length}
                   onClick={() => {
                     if (!plannerDayOptions.length) {
@@ -3036,6 +3047,49 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 >
                   {t("Taak toevoegen")}
                 </button>
+              </div>
+
+              {/* Extra options — collapsible */}
+              <div
+                className={`overflow-hidden transition-all duration-200 ${
+                  showMoreTaskOptions ? "mt-2 max-h-40 opacity-100" : "max-h-0 opacity-0"
+                }`}
+              >
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <input
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder={t("Info")}
+                    value={taskForm.info}
+                    onChange={(event) => setTaskForm((prev) => ({ ...prev, info: event.target.value }))}
+                  />
+                  <input
+                    type="datetime-local"
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    value={taskForm.deadlineAt}
+                    onChange={(event) => setTaskForm((prev) => ({ ...prev, deadlineAt: event.target.value }))}
+                  />
+                  <select
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    value={taskDeadlineTimeValue}
+                    onChange={(event) => applyTaskDeadlineTime(event.target.value)}
+                  >
+                    <option value="">{t("Sneltijd deadline")}</option>
+                    {TIME_OPTIONS.map((time) => (
+                      <option key={`task-deadline-${time}`} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    value={taskForm.priority}
+                    onChange={(event) => setTaskForm((prev) => ({ ...prev, priority: event.target.value as "hoog" | "middel" | "laag" }))}
+                  >
+                    <option value="hoog">{t("Hoog")}</option>
+                    <option value="middel">{t("Middel")}</option>
+                    <option value="laag">{t("Laag")}</option>
+                  </select>
+                </div>
               </div>
 
               {plannerUpcomingDays.map((day) => (
@@ -3294,14 +3348,18 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                     {filter === "all" ? t("Alles") : filter === "week" ? t("Deze week") : t("Specifieke dag")}
                   </button>
                 ))}
-                {hoursPeriodFilter === "day" ? (
+                <div
+                  className={`overflow-hidden transition-all duration-200 ${
+                    hoursPeriodFilter === "day" ? "max-w-[180px] opacity-100" : "max-w-0 opacity-0"
+                  }`}
+                >
                   <input
                     type="date"
                     value={hoursDayFilter}
                     className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm"
                     onChange={(event) => setHoursDayFilter(event.target.value)}
                   />
-                ) : null}
+                </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
@@ -3364,7 +3422,17 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                             <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs text-white">
                               {item.totalHours}u
                             </span>
-                            <span className="ml-auto text-slate-400">{isExpanded ? "▲" : "▼"}</span>
+                            <svg
+                              className={`ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M4 6l4 4 4-4" />
+                            </svg>
                           </button>
                           <button
                             type="button"

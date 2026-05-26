@@ -311,8 +311,31 @@ export function PlannerHeader({
 
       {/* Status chips */}
       <div className="mt-4 flex flex-wrap gap-2 text-xs text-blue-100">
-        <span className="rounded-full border border-white/30 px-2 py-1">{isOnline ? t("Online") : t("Offline")}</span>
-        <span className="rounded-full border border-white/30 px-2 py-1">{t("Wachtrij")}: {queueCount}</span>
+        <span
+          className={`flex items-center gap-1.5 rounded-full border px-2 py-1 transition-colors ${
+            isOnline && queueCount === 0
+              ? "border-white/30"
+              : "animate-pulse border-amber-400/60 bg-amber-400/20 text-amber-200"
+          }`}
+        >
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              isOnline && queueCount === 0 ? "bg-green-400" : "bg-amber-400"
+            }`}
+          />
+          {isOnline ? t("Online") : t("Offline")}
+        </span>
+        {queueCount > 0 ? (
+          <span className="flex items-center gap-1 rounded-full border border-amber-400/60 bg-amber-400/20 px-2 py-1 text-amber-200">
+            <svg className="h-3 w-3 animate-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2z" strokeOpacity="0.3" />
+              <path d="M8 2a6 6 0 0 1 6 6" strokeLinecap="round" />
+            </svg>
+            {t("Wachtrij")}: {queueCount}
+          </span>
+        ) : (
+          <span className="rounded-full border border-white/30 px-2 py-1">{t("Wachtrij")}: {queueCount}</span>
+        )}
         <span className="rounded-full border border-white/30 px-2 py-1">{timezone}</span>
       </div>
 
