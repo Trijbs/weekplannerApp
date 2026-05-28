@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const weekdaySchema = z.enum(["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag"]);
+export const weekdaySchema = z.enum(["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"]);
 export const prioritySchema = z.enum(["hoog", "middel", "laag"]);
 export const taskStatusSchema = z.enum(["open", "bezig", "klaar"]);
 

@@ -14,12 +14,12 @@ function currentWeekRange(timeZone: string) {
   const monday = new Date(today);
   monday.setUTCDate(today.getUTCDate() + mondayOffset);
 
-  const friday = new Date(monday);
-  friday.setUTCDate(monday.getUTCDate() + 4);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
 
   return {
     startDate: monday.toISOString().slice(0, 10),
-    endDate: friday.toISOString().slice(0, 10),
+    endDate: sunday.toISOString().slice(0, 10),
   };
 }
 

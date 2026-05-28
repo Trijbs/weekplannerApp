@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone *)",
+      "Read(//Users/trijbs/TrijbsCoding/**)",
+      "Read(//Users/trijbs/**)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(npx next *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npx create-expo-app@latest /Users/trijbs/TrijbsCoding/weekplanner-ios --template blank-typescript)",
+      "Bash(npx expo *)",
+      "Bash(npx tsc *)",
+      "Bash(/Users/trijbs/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh --project-dir /Users/trijbs/TrijbsCoding/weekplanner)",
+      "Bash(git commit *)",
+      "Bash(bash -c \"npx tsc --noEmit 2>&1 | head -30\")",
+      "Bash(/usr/local/bin/node ./node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(npm test *)",
+      "Bash(git rm *)",
+      "Bash(git pull *)",
+      "Bash(git rebase *)",
+      "Bash(npx eslint *)"
+    ]
+  }
+}

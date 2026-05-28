@@ -10,6 +10,8 @@ const weekdayLabelsByLanguage: Record<AppLanguage, Record<Weekday, string>> = {
     woensdag: "Woensdag",
     donderdag: "Donderdag",
     vrijdag: "Vrijdag",
+    zaterdag: "Zaterdag",
+    zondag: "Zondag",
   },
   en: {
     maandag: "Monday",
@@ -17,6 +19,8 @@ const weekdayLabelsByLanguage: Record<AppLanguage, Record<Weekday, string>> = {
     woensdag: "Wednesday",
     donderdag: "Thursday",
     vrijdag: "Friday",
+    zaterdag: "Saturday",
+    zondag: "Sunday",
   },
 };
 
@@ -173,7 +177,8 @@ const staticTranslations: Record<string, string> = {
   "Typ minimaal 2 letters om te zoeken.": "Type at least 2 letters to search.",
   "Bijv. portfolio, reflectie, logo...": "For example: portfolio, reflection, logo...",
   "Open dag voor details, uurblokken, uren en bewerken.": "Open the day for details, time blocks, hours, and editing.",
-  "Geen werkdag (ma-vr)": "No workday (Mon-Fri)",
+  "Geen werkdag (ma-vr)": "Not a valid day",
+  "Geen geldige dag": "Not a valid day",
   Dagreflecties: "Daily reflections",
   "Gebruik grotere notitievakken voor reflecties per dag en maak ze later weer compact.": "Use larger note areas for daily reflections and make them compact again later.",
   "Project / categorie": "Project / category",
@@ -182,6 +187,7 @@ const staticTranslations: Record<string, string> = {
   Berekend: "Calculated",
   "ongeldige tijd": "invalid time",
   "Gebruik berekening": "Use calculation",
+  "Kies een geldige dag voor urenregistratie.": "Choose a valid day for time tracking.",
   "Kies een werkdag (maandag t/m vrijdag) voor urenregistratie.": "Choose a workday (Monday through Friday) for time tracking.",
   "Uren toegevoegd.": "Hours added.",
   "Uren toevoegen": "Add hours",
@@ -192,6 +198,7 @@ const staticTranslations: Record<string, string> = {
   "Per week": "Per week",
   "Nog geen data": "No data yet",
   "Per project": "Per project",
+  "Geen aankomende dagen gevonden. Bekijk eerdere dagen in het tabblad ": "No upcoming days found. View earlier days in the tab ",
   "Geen aankomende werkdagen gevonden. Bekijk eerdere dagen in het tabblad ": "No upcoming workdays found. View earlier days in the tab ",
   "Google Drive is gekoppeld.": "Google Drive is connected.",
   "Drive koppeling mislukt. Controleer OAuth redirect URI en folder-id.": "Drive connection failed. Check the OAuth redirect URI and folder ID.",

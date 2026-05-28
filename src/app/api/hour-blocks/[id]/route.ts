@@ -53,7 +53,7 @@ export async function PATCH(
       if (payload.dayDate) {
         const derivedWeekday = weekdayFromIsoDate(payload.dayDate);
         if (!derivedWeekday) {
-          return fail("Uurblok datum moet op een werkdag vallen (maandag t/m vrijdag).", 400);
+          return fail("Uurblok datum is niet geldig.", 400);
         }
         dayDateForWeekMove = payload.dayDate;
         normalizedPayload.dayDate = payload.dayDate;

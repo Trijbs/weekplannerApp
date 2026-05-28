@@ -482,6 +482,8 @@ function weekdayFromIsoDate(isoDate: string): Weekday | null {
   if (day === 3) return "woensdag";
   if (day === 4) return "donderdag";
   if (day === 5) return "vrijdag";
+  if (day === 6) return "zaterdag";
+  if (day === 0) return "zondag";
   return null;
 }
 

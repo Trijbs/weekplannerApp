@@ -26,7 +26,7 @@ export async function PATCH(
     if (payload.dayDate) {
       const derivedWeekday = weekdayFromIsoDate(payload.dayDate);
       if (!derivedWeekday) {
-        return fail("Kies een werkdag (maandag t/m vrijdag) voor urenregistratie.", 400);
+        return fail("Kies een geldige dag voor urenregistratie.", 400);
       }
       payload.weekday = derivedWeekday;
       dayDateForWeekMove = payload.dayDate;

@@ -43,6 +43,8 @@ const weekdayOrder: Record<Weekday, number> = {
   woensdag: 3,
   donderdag: 4,
   vrijdag: 5,
+  zaterdag: 6,
+  zondag: 7,
 };
 
 let sqlClient: NeonQuery | null = null;

@@ -33,6 +33,12 @@ const weekdayAliases: Record<string, Weekday> = {
   vr: "vrijdag",
   vrij: "vrijdag",
   vrijdag: "vrijdag",
+  za: "zaterdag",
+  zat: "zaterdag",
+  zaterdag: "zaterdag",
+  zo: "zondag",
+  zon: "zondag",
+  zondag: "zondag",
 };
 
 export function parseWeekday(input: string): Weekday | null {
@@ -56,6 +62,8 @@ export function weekdayFromIsoDate(isoDate: string): Weekday | null {
   if (day === 3) return "woensdag";
   if (day === 4) return "donderdag";
   if (day === 5) return "vrijdag";
+  if (day === 6) return "zaterdag";
+  if (day === 0) return "zondag";
   return null;
 }
 

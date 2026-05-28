@@ -45,7 +45,7 @@ export async function POST(
     if (normalizedDayDate) {
       const derivedWeekday = weekdayFromIsoDate(normalizedDayDate);
       if (!derivedWeekday) {
-        return fail("Uurblok datum moet op een werkdag vallen (maandag t/m vrijdag).", 400);
+        return fail("Uurblok datum is niet geldig.", 400);
       }
       normalizedWeekday = derivedWeekday;
       const targetWeek = await ensureWeekForDate(normalizedDayDate);

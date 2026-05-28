@@ -48,7 +48,7 @@ export async function POST(
     const payload = hourEntryCreateSchema.parse(body);
     const derivedWeekday = weekdayFromIsoDate(payload.dayDate);
     if (!derivedWeekday) {
-      return fail("Kies een werkdag (maandag t/m vrijdag) voor urenregistratie.", 400);
+      return fail("Kies een geldige dag voor urenregistratie.", 400);
     }
     const targetWeek = await ensureWeekForDate(payload.dayDate);
     const targetWeekId = targetWeek.id;

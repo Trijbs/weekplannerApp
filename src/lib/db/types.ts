@@ -4,6 +4,8 @@ export const WEEKDAYS = [
   "woensdag",
   "donderdag",
   "vrijdag",
+  "zaterdag",
+  "zondag",
 ] as const;
 
 export type Weekday = (typeof WEEKDAYS)[number];

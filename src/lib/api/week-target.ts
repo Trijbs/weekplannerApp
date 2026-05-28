@@ -23,12 +23,12 @@ export function isoWeekRange(week: number, year: number): { startDate: string; e
 
   const monday = new Date(week1Monday);
   monday.setUTCDate(week1Monday.getUTCDate() + (week - 1) * 7);
-  const friday = new Date(monday);
-  friday.setUTCDate(monday.getUTCDate() + 4);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
 
   return {
     startDate: monday.toISOString().slice(0, 10),
-    endDate: friday.toISOString().slice(0, 10),
+    endDate: sunday.toISOString().slice(0, 10),
   };
 }
 

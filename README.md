@@ -22,7 +22,7 @@ Weekplanner is a Dutch-first PWA for weekly planning and hour tracking. It runs 
 ## Features
 
 ### Planning
-- Weekly planner for Monday through Friday
+- Weekly planner for Monday through Sunday
 - Day tasks with priority levels (high / medium / low) shown as color-coded left borders
 - Task status badges: Open (grey), Bezig (blue), Klaar (green)
 - Two-step delete confirmation on all tasks (2-second auto-reset)
@@ -259,6 +259,6 @@ npm run db:neon:init # Apply database schema to Neon
 
 ## Notes
 
-- The planner covers Monday through Friday only.
+- The planner covers Monday through Sunday (all seven days).
 - All dates and times use the `Europe/Amsterdam` timezone by default; this is configurable from the header menu.
 - Vercel Hobby is used for hosting; the hourly Drive sync stays in GitHub Actions by design (Vercel Hobby does not support cron jobs).

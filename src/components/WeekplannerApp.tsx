@@ -128,12 +128,12 @@ function isoWeekStartEnd(weekNumber: number, year: number): { startDate: string;
   const monday = new Date(week1Monday);
   monday.setUTCDate(week1Monday.getUTCDate() + (weekNumber - 1) * 7);
 
-  const friday = new Date(monday);
-  friday.setUTCDate(monday.getUTCDate() + 4);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
 
   return {
     startDate: monday.toISOString().slice(0, 10),
-    endDate: friday.toISOString().slice(0, 10),
+    endDate: sunday.toISOString().slice(0, 10),
   };
 }
 
@@ -787,6 +787,8 @@ function weekdayFromIsoDate(isoDate: string): Weekday | null {
   if (day === 3) return "woensdag";
   if (day === 4) return "donderdag";
   if (day === 5) return "vrijdag";
+  if (day === 6) return "zaterdag";
+  if (day === 0) return "zondag";
   return null;
 }
 
@@ -797,6 +799,8 @@ function weekdayDatesFromRange(startDate: string, endDate: string): Record<Weekd
     woensdag: "",
     donderdag: "",
     vrijdag: "",
+    zaterdag: "",
+    zondag: "",
   } satisfies Record<Weekday, string>;
 
   if (!startDate || !endDate || startDate > endDate) {
@@ -1236,6 +1240,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       woensdag: [] as DayTask[],
       donderdag: [] as DayTask[],
       vrijdag: [] as DayTask[],
+      zaterdag: [] as DayTask[],
+      zondag: [] as DayTask[],
     };
 
     for (const task of payload.tasks) {
@@ -1257,6 +1263,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         woensdag: "",
         donderdag: "",
         vrijdag: "",
+        zaterdag: "",
+        zondag: "",
       } satisfies Record<Weekday, string>;
     }
 
@@ -1271,6 +1279,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         woensdag: weekdayIsoMap.woensdag ? formatDayDateLabelForLanguage(weekdayIsoMap.woensdag) : "",
         donderdag: weekdayIsoMap.donderdag ? formatDayDateLabelForLanguage(weekdayIsoMap.donderdag) : "",
         vrijdag: weekdayIsoMap.vrijdag ? formatDayDateLabelForLanguage(weekdayIsoMap.vrijdag) : "",
+        zaterdag: weekdayIsoMap.zaterdag ? formatDayDateLabelForLanguage(weekdayIsoMap.zaterdag) : "",
+        zondag: weekdayIsoMap.zondag ? formatDayDateLabelForLanguage(weekdayIsoMap.zondag) : "",
       }) satisfies Record<Weekday, string>,
     [formatDayDateLabelForLanguage, weekdayIsoMap],
   );
@@ -1302,10 +1312,10 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
     const datedDays = orderedWeekdays.filter((day) => Boolean(weekdayIsoMap[day]));
     if (datedDays.length > 0) {
-      return datedDays.slice(0, 5);
+      return datedDays;
     }
 
-    return orderedWeekdays.slice(0, 5);
+    return orderedWeekdays;
   }, [orderedWeekdays, weekdayIsoMap]);
   const plannerDayOptions = useMemo(() => visiblePlannerDays, [visiblePlannerDays]);
 
@@ -2209,7 +2219,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
       const weekday = weekdayFromIsoDate(dateIso);
       if (!weekday) {
-        setError(language === "en" ? "Choose a weekday between Monday and Friday." : "Kies een werkdag tussen maandag en vrijdag.");
+        setError(language === "en" ? "Choose a valid day for this action." : "Kies een geldige dag voor deze actie.");
         return;
       }
 
@@ -3009,7 +3019,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   disabled={!plannerDayOptions.length}
                   onClick={() => {
                     if (!plannerDayOptions.length) {
-                      setError(language === "en" ? "No workdays available in this week." : "Geen werkdagen beschikbaar in deze week.");
+                      setError(language === "en" ? "No days available in this week." : "Geen dagen beschikbaar in deze week.");
                       return;
                     }
 
@@ -3202,7 +3212,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
               })}
               {plannerUpcomingDays.length === 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-                  {t("Geen aankomende werkdagen gevonden. Bekijk eerdere dagen in het tabblad ")}
+                  {t("Geen aankomende dagen gevonden. Bekijk eerdere dagen in het tabblad ")}
                   <strong>{t("Verlopen dagen")}</strong>.
                 </div>
               ) : null}
@@ -3352,7 +3362,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   disabled={!hourFormDerivedWeekday || Number(hourForm.hoursDecimal) <= 0}
                   onClick={() => {
                     if (!hourFormDerivedWeekday) {
-                      setError(t("Kies een werkdag (maandag t/m vrijdag) voor urenregistratie."));
+                      setError(t("Kies een geldige dag voor urenregistratie."));
                       return;
                     }
 
@@ -3925,7 +3935,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
                 {blockMultiDay ? (
                   <div className="col-span-2 flex flex-wrap gap-2">
-                    {(["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag"] as Weekday[]).map((day) => (
+                    {(WEEKDAYS as unknown as Weekday[]).map((day) => (
                       <button
                         key={day}
                         type="button"

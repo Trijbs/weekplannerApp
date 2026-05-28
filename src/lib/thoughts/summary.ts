@@ -1,7 +1,7 @@
 import type { ThoughtMessage, ThoughtSummaryContent } from "@/lib/db/types";
 
 const TASK_HINT = /\b(moet|todo|to do|taak|regelen|fix|bellen|mailen|sturen|uitzoeken|plannen|afmaken)\b/i;
-const PLANNING_HINT = /\b(vandaag|morgen|maandag|dinsdag|woensdag|donderdag|vrijdag|week|planning|deadline|ochtend|middag)\b/i;
+const PLANNING_HINT = /\b(vandaag|morgen|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|week|planning|deadline|ochtend|middag)\b/i;
 const IDEA_HINT = /\b(idee|misschien|zou kunnen|concept|bouwen|bedenken|later|experiment|verbeteren)\b/i;
 const FILLER_WORDS = new Set([
   "alleen",
