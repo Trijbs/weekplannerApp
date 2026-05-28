@@ -146,7 +146,10 @@ export function PlannerHeader({
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [menuOpen]);
 
-  const matchLabel = (count: number) => `${count} match${count === 1 ? "" : "es"}`;
+  const matchLabel = (count: number) =>
+    language === "nl"
+      ? `${count} ${count === 1 ? "resultaat" : "resultaten"}`
+      : `${count} ${count === 1 ? "match" : "matches"}`;
 
   return (
     <header className="rounded-[2rem] bg-[linear-gradient(135deg,#0f172a,#1d4ed8)] px-4 py-5 text-white shadow-2xl shadow-blue-900/30 sm:px-6 sm:py-8">
@@ -331,12 +334,10 @@ export function PlannerHeader({
               <path d="M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2z" strokeOpacity="0.3" />
               <path d="M8 2a6 6 0 0 1 6 6" strokeLinecap="round" />
             </svg>
-            {t("Wachtrij")}: {queueCount}
+            {queueCount} {t("in wachtrij")}
           </span>
-        ) : (
-          <span className="rounded-full border border-white/30 px-2 py-1">{t("Wachtrij")}: {queueCount}</span>
-        )}
-        <span className="rounded-full border border-white/30 px-2 py-1">{timezone}</span>
+        ) : null}
+        <span className="rounded-full border border-white/20 px-2 py-1 text-blue-200/70">{timezone}</span>
       </div>
 
       {/* Mobile search buttons */}
@@ -370,16 +371,11 @@ export function PlannerHeader({
       </div>
 
       {/* Desktop search panels */}
-      <div className="mt-4 hidden flex-col gap-2 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur md:flex md:flex-row md:items-end md:justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.15em] text-blue-100">{t("Zoek Dag")}</p>
-          <p className="mt-1 text-sm text-blue-50">
-            {language === "en"
-              ? "Choose a date and open the day detail immediately."
-              : "Kies een datum en open direct het dagdetail."}
-          </p>
+      <div className="mt-4 hidden items-center gap-2 rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur md:flex">
+        <div className="shrink-0">
+          <p className="text-xs font-medium uppercase tracking-[0.15em] text-blue-200">{t("Ga naar dag")}</p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+        <div className="ml-auto flex gap-2">
           <input
             type="date"
             value={daySearchDate}
@@ -388,26 +384,21 @@ export function PlannerHeader({
           />
           <button
             type="button"
-            className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900"
+            className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900 hover:bg-blue-50"
             onClick={onGoToDay}
           >
-            {t("Ga naar dag")}
+            {t("Open")}
           </button>
         </div>
       </div>
 
-      <div className="mt-3 hidden rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur md:block">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.15em] text-blue-100">{t("Zoek Project Of Taak")}</p>
-            <p className="mt-1 text-sm text-blue-50">
-              {t("Zoek op projectnaam, taaknaam of reflectietekst en open direct de juiste dag.")}
-            </p>
-          </div>
+      <div className="mt-2 hidden rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur md:block">
+        <div className="flex items-center gap-3">
+          <p className="shrink-0 text-xs font-medium uppercase tracking-[0.15em] text-blue-200">{t("Zoeken")}</p>
           <input
             value={plannerSearchQuery}
-            className="w-full rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm text-white md:max-w-md"
-            placeholder={t("Bijv. portfolio, reflectie, logo...")}
+            className="flex-1 rounded-xl border border-white/30 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-blue-200/50"
+            placeholder={t("Project, taak of reflectie...")}
             onChange={(event) => onPlannerSearchQueryChange(event.target.value)}
           />
         </div>

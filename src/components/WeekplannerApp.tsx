@@ -3104,78 +3104,102 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 </div>
               </div>
 
-              {plannerUpcomingDays.map((day) => (
-                <div
-                  key={day.key}
-                  className={`rounded-xl border p-4 ${
-                    day.isToday
-                      ? "border-blue-300 bg-blue-50/40"
-                      : "border-slate-200"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      className="text-left font-semibold text-slate-900 hover:text-blue-700"
-                      onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
-                    >
-                      {weekdayLabels[day.weekday]}
-                      {day.dayDate ? (
-                        <span className="ml-2 text-sm font-normal text-slate-500">
-                          ({formatDayDateLabelForLanguage(day.dayDate)})
-                        </span>
-                      ) : null}
-                      <span className="ml-2 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-normal text-slate-600">
-                        {day.weekLabel}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
-                      onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
-                    >
-                      {t("Open dag")}
-                    </button>
-                  </div>
-                  {day.isToday ? (
-                    <p className="mt-2 text-xs text-blue-700">{t("Nu")}: {liveNowAmsterdam}</p>
-                  ) : null}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {(() => {
-                      const labels = Array.from(
-                        new Set(
-                          day.tasks
-                            .map((task) => {
-                              const project = projectNameForTask(task, day.hourBlocks);
-                              if (project) {
-                                return project;
-                              }
-                              return task.title.trim();
-                            })
-                            .filter((label): label is string => Boolean(label))
-                            .filter((label) => !isPauseLabel(label)),
-                        ),
-                      );
-
-                      if (!labels.length) {
-                        return <p className="text-sm text-slate-500">{t("Geen taken voor deze dag.")}</p>;
-                      }
-
-                      return labels.map((label) => (
-                        <span
-                          key={`${day.key}-project-${label}`}
-                          className="rounded-full border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+              {plannerUpcomingDays.map((day) => {
+                const doneCount = day.tasks.filter((task) => task.status === "klaar").length;
+                const totalCount = day.tasks.length;
+                const allDone = totalCount > 0 && doneCount === totalCount;
+                return (
+                  <div
+                    key={day.key}
+                    className={`rounded-xl border p-4 transition-colors ${
+                      day.isToday
+                        ? "border-blue-400 bg-blue-50/60 shadow-sm shadow-blue-100"
+                        : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <button
+                        type="button"
+                        className="flex-1 text-left"
+                        onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`font-semibold ${day.isToday ? "text-blue-700" : "text-slate-900"} hover:text-blue-700`}>
+                            {weekdayLabels[day.weekday]}
+                          </span>
+                          {day.dayDate ? (
+                            <span className="text-sm text-slate-500">
+                              {formatDayDateLabelForLanguage(day.dayDate)}
+                            </span>
+                          ) : null}
+                          {day.isToday ? (
+                            <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                              {t("Vandaag")}
+                            </span>
+                          ) : (
+                            <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-500">
+                              {day.weekLabel}
+                            </span>
+                          )}
+                          {allDone && totalCount > 0 ? (
+                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                              ✓ {t("Klaar")}
+                            </span>
+                          ) : null}
+                        </div>
+                        {day.isToday ? (
+                          <p className="mt-1 text-xs text-blue-600">{liveNowAmsterdam}</p>
+                        ) : null}
+                      </button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {totalCount > 0 ? (
+                          <span className="text-xs text-slate-500">
+                            {doneCount}/{totalCount}
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          className={`rounded-lg border px-2 py-1 text-xs ${day.isToday ? "border-blue-300 bg-white text-blue-700 hover:bg-blue-50" : "border-slate-300 text-slate-700 hover:bg-slate-50"}`}
+                          onClick={() => void openPlannerDayDetailForWeek(day.weekId, day.weekday, day.dayDate)}
                         >
-                          {label}
-                        </span>
-                      ));
-                    })()}
+                          {t("Open dag")}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {(() => {
+                        const labels = Array.from(
+                          new Set(
+                            day.tasks
+                              .map((task) => {
+                                const project = projectNameForTask(task, day.hourBlocks);
+                                if (project) {
+                                  return project;
+                                }
+                                return task.title.trim();
+                              })
+                              .filter((label): label is string => Boolean(label))
+                              .filter((label) => !isPauseLabel(label)),
+                          ),
+                        );
+
+                        if (!labels.length) {
+                          return <p className="text-sm text-slate-400 italic">{t("Geen taken gepland.")}</p>;
+                        }
+
+                        return labels.map((label) => (
+                          <span
+                            key={`${day.key}-project-${label}`}
+                            className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600"
+                          >
+                            {label}
+                          </span>
+                        ));
+                      })()}
+                    </div>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    {t("Open dag voor details, uurblokken, uren en bewerken.")}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
               {plannerUpcomingDays.length === 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
                   {t("Geen aankomende werkdagen gevonden. Bekijk eerdere dagen in het tabblad ")}
@@ -3196,81 +3220,89 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
           {tab === "hours" && payload ? (
             <div className="space-y-5">
-              <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("Dagreflecties")}</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {t("Gebruik grotere notitievakken voor reflecties per dag en maak ze later weer compact.")}
-                  </p>
-                </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Uren toevoegen")}</p>
                 <button
                   type="button"
-                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50"
                   onClick={() => setHoursNotesExpanded((prev) => !prev)}
                 >
-                  {hoursNotesExpanded ? t("Compacte notities") : t("Grotere notities")}
+                  {hoursNotesExpanded ? t("Compacte notities") : t("Uitgebreide notities")}
                 </button>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <input
-                  type="date"
-                  value={hourForm.dayDate}
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  onChange={(event) => {
-                    const dayDate = event.target.value;
-                    const derivedWeekday = weekdayFromIsoDate(dayDate);
-                    setHourForm((prev) => ({
-                      ...prev,
-                      dayDate,
-                      weekday: derivedWeekday ?? prev.weekday,
-                    }));
-                  }}
-                />
-                <div className="flex items-center rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-slate-700">
-                  {hourFormDerivedWeekday ? weekdayLabels[hourFormDerivedWeekday] : t("Geen werkdag (ma-vr)")}
-                </div>
-                <select
-                  value={hourForm.hoursDecimal}
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  onChange={(event) => setHourForm((prev) => ({ ...prev, hoursDecimal: event.target.value }))}
-                  onWheel={(event) => {
-                    event.preventDefault();
-                    const direction = event.deltaY > 0 ? 1 : -1;
-                    setHourForm((prev) => {
-                      const currentIndex = Math.max(0, hourSelectOptions.indexOf(prev.hoursDecimal));
-                      const nextIndex = Math.min(
-                        hourSelectOptions.length - 1,
-                        Math.max(0, currentIndex + direction),
-                      );
-                      return {
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-500">{t("Datum")}</span>
+                  <input
+                    type="date"
+                    value={hourForm.dayDate}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    onChange={(event) => {
+                      const dayDate = event.target.value;
+                      const derivedWeekday = weekdayFromIsoDate(dayDate);
+                      setHourForm((prev) => ({
                         ...prev,
-                        hoursDecimal: hourSelectOptions[nextIndex] ?? prev.hoursDecimal,
-                      };
-                    });
-                  }}
-                >
-                  {hourSelectOptions.map((value) => (
-                    <option key={`hours-${value}`} value={value}>
-                      {value}u
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={hourForm.projectName}
-                  className="rounded-xl border border-slate-300 px-3 py-2"
-                  placeholder={t("Project / categorie")}
-                  onChange={(event) => setHourForm((prev) => ({ ...prev, projectName: event.target.value }))}
-                />
-                <textarea
-                  value={hourForm.noteText}
-                  rows={hoursNotesExpanded ? 5 : 2}
-                  className={`rounded-xl border border-slate-300 px-3 py-2 resize-y ${
-                    hoursNotesExpanded ? "min-h-[8rem] sm:col-span-2 lg:col-span-3" : "min-h-[5.5rem] sm:col-span-2 lg:col-span-2"
-                  }`}
-                  placeholder={t("Reflectie of notitie van deze dag")}
-                  onChange={(event) => setHourForm((prev) => ({ ...prev, noteText: event.target.value }))}
-                />
-                <div className="rounded-xl border border-slate-300 bg-slate-50 p-3 sm:col-span-2 lg:col-span-3">
+                        dayDate,
+                        weekday: derivedWeekday ?? prev.weekday,
+                      }));
+                    }}
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-500">{t("Dag")}</span>
+                  <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    {hourFormDerivedWeekday ? weekdayLabels[hourFormDerivedWeekday] : t("Geen werkdag")}
+                  </div>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-500">{t("Uren")}</span>
+                  <select
+                    value={hourForm.hoursDecimal}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    onChange={(event) => setHourForm((prev) => ({ ...prev, hoursDecimal: event.target.value }))}
+                    onWheel={(event) => {
+                      event.preventDefault();
+                      const direction = event.deltaY > 0 ? 1 : -1;
+                      setHourForm((prev) => {
+                        const currentIndex = Math.max(0, hourSelectOptions.indexOf(prev.hoursDecimal));
+                        const nextIndex = Math.min(
+                          hourSelectOptions.length - 1,
+                          Math.max(0, currentIndex + direction),
+                        );
+                        return {
+                          ...prev,
+                          hoursDecimal: hourSelectOptions[nextIndex] ?? prev.hoursDecimal,
+                        };
+                      });
+                    }}
+                  >
+                    {hourSelectOptions.map((value) => (
+                      <option key={`hours-${value}`} value={value}>
+                        {value}u
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-slate-500">{t("Project")}</span>
+                  <input
+                    value={hourForm.projectName}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder={t("Project / categorie")}
+                    onChange={(event) => setHourForm((prev) => ({ ...prev, projectName: event.target.value }))}
+                  />
+                </label>
+                <label className={`flex flex-col gap-1 ${hoursNotesExpanded ? "sm:col-span-2 lg:col-span-2" : "sm:col-span-2 lg:col-span-2"}`}>
+                  <span className="text-xs text-slate-500">{t("Reflectie")}</span>
+                  <textarea
+                    value={hourForm.noteText}
+                    rows={hoursNotesExpanded ? 5 : 2}
+                    className="resize-y rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                    placeholder={t("Notitie of reflectie over deze dag")}
+                    onChange={(event) => setHourForm((prev) => ({ ...prev, noteText: event.target.value }))}
+                  />
+                </label>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2 lg:col-span-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t("Uren calculator")}</p>
                   <div className="mt-2 grid gap-2 sm:grid-cols-3">
                     <input
