@@ -22,18 +22,37 @@ export interface MultiWeekFormState {
   weekEntries: WeekEntry[];
 }
 
-export type MultiWeekPlanModalProps = {
-  language: AppLanguage;
-  /** ISO date of the Monday of the currently displayed week (used to compute future week labels) */
-  currentWeekMonday: string;
-  onClose: () => void;
-  onSubmit: (payload: {
-    title: string;
-    info: string;
-    priority: Priority;
-    entries: Array<{ weekOffset: number; weekdays: Weekday[] }>;
-  }) => Promise<void>;
+type TaskSubmitPayload = {
+  title: string;
+  info: string;
+  priority: Priority;
+  entries: Array<{ weekOffset: number; weekdays: Weekday[] }>;
 };
+
+type BlockSubmitPayload = {
+  taskText: string;
+  projectText: string;
+  timeStart: string;
+  timeEnd: string;
+  status: "open" | "bezig" | "klaar";
+  entries: Array<{ weekOffset: number; weekdays: Weekday[] }>;
+};
+
+export type MultiWeekPlanModalProps =
+  | {
+      mode?: "task";
+      language: AppLanguage;
+      currentWeekMonday: string;
+      onClose: () => void;
+      onSubmit: (payload: TaskSubmitPayload) => Promise<void>;
+    }
+  | {
+      mode: "block";
+      language: AppLanguage;
+      currentWeekMonday: string;
+      onClose: () => void;
+      onSubmit: (payload: BlockSubmitPayload) => Promise<void>;
+    };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -343,22 +362,40 @@ function WeekRow({
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const TIME_OPTIONS = Array.from({ length: 96 }, (_, i) => {
+  const h = String(Math.floor(i / 4)).padStart(2, "0");
+  const m = String((i % 4) * 15).padStart(2, "0");
+  return `${h}:${m}`;
+});
+
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const MAX_WEEKS = 9; // current + 8 future
 
-export function MultiWeekPlanModal({
-  language,
-  currentWeekMonday,
-  onClose,
-  onSubmit,
-}: MultiWeekPlanModalProps) {
+export function MultiWeekPlanModal(props: MultiWeekPlanModalProps) {
+  const { language, currentWeekMonday, onClose, onSubmit } = props;
+  const mode = props.mode ?? "task";
+
   const t = (text: string) => translateStatic(language, text);
   const [form, dispatch] = useReducer(reducer, undefined, buildInitialState);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [globalPreset, setGlobalPreset] = useState<Preset>("geen");
   const titleRef = useRef<HTMLInputElement>(null);
+
+  // Block-specific state
+  const [blockTaskText, setBlockTaskText] = useState("");
+  const [blockProjectText, setBlockProjectText] = useState("");
+  const [blockTimeStart, setBlockTimeStart] = useState("09:00");
+  const [blockTimeEnd, setBlockTimeEnd] = useState("10:00");
+  const [blockStatus, setBlockStatus] = useState<"open" | "bezig" | "klaar">("open");
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -382,7 +419,11 @@ export function MultiWeekPlanModal({
     [form.weekEntries],
   );
 
-  const canSubmit = form.title.trim().length > 0 && totalTasks > 0;
+  const blockTimeValid = timeToMinutes(blockTimeEnd) > timeToMinutes(blockTimeStart);
+
+  const canSubmit =
+    totalTasks > 0 &&
+    (mode === "task" ? form.title.trim().length > 0 : blockTimeValid);
 
   function handleToggleWeek(offset: number) {
     dispatch({ type: "TOGGLE_WEEK", weekOffset: offset });
@@ -395,23 +436,36 @@ export function MultiWeekPlanModal({
     }
   }
 
+  const entriesPayload = form.weekEntries
+    .filter((e) => e.weekdays.size > 0)
+    .map((e) => ({
+      weekOffset: e.weekOffset,
+      weekdays: WEEKDAYS.filter((d) => e.weekdays.has(d)),
+    }));
+
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     setSubmitError(null);
 
     try {
-      await onSubmit({
-        title: form.title.trim(),
-        info: form.info.trim(),
-        priority: form.priority,
-        entries: form.weekEntries
-          .filter((e) => e.weekdays.size > 0)
-          .map((e) => ({
-            weekOffset: e.weekOffset,
-            weekdays: WEEKDAYS.filter((d) => e.weekdays.has(d)),
-          })),
-      });
+      if (mode === "block") {
+        await (onSubmit as (p: BlockSubmitPayload) => Promise<void>)({
+          taskText: blockTaskText.trim(),
+          projectText: blockProjectText.trim(),
+          timeStart: blockTimeStart,
+          timeEnd: blockTimeEnd,
+          status: blockStatus,
+          entries: entriesPayload,
+        });
+      } else {
+        await (onSubmit as (p: TaskSubmitPayload) => Promise<void>)({
+          title: form.title.trim(),
+          info: form.info.trim(),
+          priority: form.priority,
+          entries: entriesPayload,
+        });
+      }
       onClose();
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Opslaan mislukt. Probeer opnieuw.");
@@ -435,7 +489,9 @@ export function MultiWeekPlanModal({
               {language === "en" ? "Multi-week planner" : "Meerdere weken inplannen"}
             </p>
             <h2 className="text-xl font-semibold text-slate-900">
-              {language === "en" ? "Add task across weeks" : "Taak inplannen over meerdere weken"}
+              {mode === "block"
+                ? (language === "en" ? "Add hour block across weeks" : "Uurblok inplannen over meerdere weken")
+                : (language === "en" ? "Add task across weeks" : "Taak inplannen over meerdere weken")}
             </h2>
           </div>
           <button
@@ -448,54 +504,150 @@ export function MultiWeekPlanModal({
         </div>
 
         <div className="flex flex-col gap-5 overflow-y-auto p-4 sm:p-6">
-          {/* Task fields */}
+          {/* Detail fields — task or block */}
           <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <h3 className="mb-3 text-sm font-semibold text-slate-800">
-              {language === "en" ? "Task details" : "Taakgegevens"}
+              {mode === "block"
+                ? (language === "en" ? "Block details" : "Uurblokgegevens")
+                : (language === "en" ? "Task details" : "Taakgegevens")}
             </h3>
-            <div className="grid gap-2.5">
-              <input
-                ref={titleRef}
-                value={form.title}
-                onChange={(e) => dispatch({ type: "SET_TITLE", value: e.target.value })}
-                placeholder={language === "en" ? "Task title (required)" : "Taaknaam (verplicht)"}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.preventDefault();
-                }}
-              />
-              <input
-                value={form.info}
-                onChange={(e) => dispatch({ type: "SET_INFO", value: e.target.value })}
-                placeholder={language === "en" ? "Extra info or project" : "Info of project (optioneel)"}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
-              />
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-slate-600">
-                  {language === "en" ? "Priority:" : "Prioriteit:"}
-                </label>
-                {(["hoog", "middel", "laag"] as Priority[]).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => dispatch({ type: "SET_PRIORITY", value: p })}
-                    className={`rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
-                      form.priority === p
-                        ? p === "hoog"
-                          ? "bg-red-500 text-white"
-                          : p === "middel"
-                          ? "bg-amber-400 text-amber-900"
-                          : "bg-slate-400 text-white"
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                    }`}
-                  >
-                    {language === "en"
-                      ? p === "hoog" ? "High" : p === "middel" ? "Medium" : "Low"
-                      : p === "hoog" ? "Hoog" : p === "middel" ? "Middel" : "Laag"}
-                  </button>
-                ))}
+
+            {mode === "block" ? (
+              <div className="grid gap-2.5">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input
+                    ref={titleRef}
+                    value={blockTaskText}
+                    onChange={(e) => setBlockTaskText(e.target.value)}
+                    placeholder={language === "en" ? "Task label (optional)" : "Taaklabel (optioneel)"}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                  />
+                  <input
+                    value={blockProjectText}
+                    onChange={(e) => setBlockProjectText(e.target.value)}
+                    placeholder={language === "en" ? "Project (optional)" : "Project (optioneel)"}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                  />
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      {language === "en" ? "Start time" : "Begintijd"}
+                    </label>
+                    <select
+                      value={blockTimeStart}
+                      onChange={(e) => {
+                        const start = e.target.value;
+                        setBlockTimeStart(start);
+                        // auto-advance end time to +1h if it hasn't been manually changed
+                        const startIdx = TIME_OPTIONS.indexOf(start);
+                        const autoEnd = startIdx >= 0 ? (TIME_OPTIONS[Math.min(startIdx + 4, TIME_OPTIONS.length - 1)] ?? blockTimeEnd) : blockTimeEnd;
+                        if (timeToMinutes(blockTimeEnd) <= timeToMinutes(start)) {
+                          setBlockTimeEnd(autoEnd);
+                        }
+                      }}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                    >
+                      {TIME_OPTIONS.map((t) => (
+                        <option key={`start-${t}`} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-600">
+                      {language === "en" ? "End time" : "Eindtijd"}
+                    </label>
+                    <select
+                      value={blockTimeEnd}
+                      onChange={(e) => setBlockTimeEnd(e.target.value)}
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none focus:ring-1 ${
+                        blockTimeValid
+                          ? "border-slate-300 focus:border-amber-400 focus:ring-amber-300"
+                          : "border-red-400 focus:border-red-400 focus:ring-red-200"
+                      }`}
+                    >
+                      {TIME_OPTIONS.map((t) => (
+                        <option key={`end-${t}`} value={t}>{t}</option>
+                      ))}
+                    </select>
+                    {!blockTimeValid && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {language === "en" ? "End must be after start" : "Eindtijd moet later zijn dan begintijd"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-600">
+                    {language === "en" ? "Status:" : "Status:"}
+                  </label>
+                  {(["open", "bezig", "klaar"] as const).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setBlockStatus(s)}
+                      className={`rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
+                        blockStatus === s
+                          ? s === "klaar"
+                            ? "bg-green-500 text-white"
+                            : s === "bezig"
+                            ? "bg-blue-500 text-white"
+                            : "bg-slate-900 text-white"
+                          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      }`}
+                    >
+                      {language === "en"
+                        ? s === "klaar" ? "Done" : s === "bezig" ? "In progress" : "Open"
+                        : s === "klaar" ? "Klaar" : s === "bezig" ? "Bezig" : "Open"}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="grid gap-2.5">
+                <input
+                  ref={titleRef}
+                  value={form.title}
+                  onChange={(e) => dispatch({ type: "SET_TITLE", value: e.target.value })}
+                  placeholder={language === "en" ? "Task title (required)" : "Taaknaam (verplicht)"}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                />
+                <input
+                  value={form.info}
+                  onChange={(e) => dispatch({ type: "SET_INFO", value: e.target.value })}
+                  placeholder={language === "en" ? "Extra info or project" : "Info of project (optioneel)"}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-300"
+                />
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-600">
+                    {language === "en" ? "Priority:" : "Prioriteit:"}
+                  </label>
+                  {(["hoog", "middel", "laag"] as Priority[]).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => dispatch({ type: "SET_PRIORITY", value: p })}
+                      className={`rounded-full px-3 py-0.5 text-xs font-semibold transition-colors ${
+                        form.priority === p
+                          ? p === "hoog"
+                            ? "bg-red-500 text-white"
+                            : p === "middel"
+                            ? "bg-amber-400 text-amber-900"
+                            : "bg-slate-400 text-white"
+                          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      }`}
+                    >
+                      {language === "en"
+                        ? p === "hoog" ? "High" : p === "middel" ? "Medium" : "Low"
+                        : p === "hoog" ? "Hoog" : p === "middel" ? "Middel" : "Laag"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Global preset strip */}
@@ -533,7 +685,10 @@ export function MultiWeekPlanModal({
                 {language === "en" ? "Select weeks & days" : "Kies weken en dagen"}
               </h3>
               <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
-                {totalTasks} {language === "en" ? (totalTasks === 1 ? "task" : "tasks") : (totalTasks === 1 ? "taak" : "taken")}
+                {totalTasks}{" "}
+                {mode === "block"
+                  ? (language === "en" ? (totalTasks === 1 ? "block" : "blocks") : (totalTasks === 1 ? "blok" : "blokken"))
+                  : (language === "en" ? (totalTasks === 1 ? "task" : "tasks") : (totalTasks === 1 ? "taak" : "taken"))}
               </span>
             </div>
 
@@ -602,9 +757,13 @@ export function MultiWeekPlanModal({
           {totalTasks > 0 && (
             <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
               <span className="font-semibold text-slate-900">{totalTasks}</span>{" "}
-              {language === "en"
-                ? `task${totalTasks === 1 ? "" : "s"} will be created across `
-                : `taak${totalTasks === 1 ? "" : "en"} worden aangemaakt, verdeeld over `}
+              {mode === "block"
+                ? (language === "en"
+                    ? `hour block${totalTasks === 1 ? "" : "s"} will be created across `
+                    : `uurblok${totalTasks === 1 ? "" : "ken"} worden aangemaakt, verdeeld over `)
+                : (language === "en"
+                    ? `task${totalTasks === 1 ? "" : "s"} will be created across `
+                    : `taak${totalTasks === 1 ? "" : "en"} worden aangemaakt, verdeeld over `)}
               <span className="font-semibold text-slate-900">{form.weekEntries.length}</span>{" "}
               {language === "en"
                 ? `week${form.weekEntries.length === 1 ? "" : "s"}.`
@@ -636,9 +795,13 @@ export function MultiWeekPlanModal({
           >
             {submitting
               ? (language === "en" ? "Saving…" : "Opslaan…")
-              : language === "en"
-              ? `Add ${totalTasks} task${totalTasks === 1 ? "" : "s"}`
-              : `${totalTasks} taak${totalTasks === 1 ? "" : "en"} aanmaken`}
+              : mode === "block"
+              ? (language === "en"
+                  ? `Add ${totalTasks} block${totalTasks === 1 ? "" : "s"}`
+                  : `${totalTasks} blok${totalTasks === 1 ? "" : "ken"} aanmaken`)
+              : (language === "en"
+                  ? `Add ${totalTasks} task${totalTasks === 1 ? "" : "s"}`
+                  : `${totalTasks} taak${totalTasks === 1 ? "" : "en"} aanmaken`)}
           </button>
         </div>
       </div>

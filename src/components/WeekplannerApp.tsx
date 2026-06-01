@@ -885,6 +885,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [blockMultiDay, setBlockMultiDay] = useState(false);
   const [blockMultiDaySelection, setBlockMultiDaySelection] = useState<Set<Weekday>>(new Set());
   const [showMultiWeekModal, setShowMultiWeekModal] = useState(false);
+  const [showMultiWeekBlockModal, setShowMultiWeekBlockModal] = useState(false);
 
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [weekSnapshots, setWeekSnapshots] = useState<Record<string, WeekDetailPayload>>({});
@@ -4128,6 +4129,25 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 >
                   {t("Uurblok toevoegen")}
                 </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  title={language === "en" ? "Plan block across multiple weeks" : "Uurblok over meerdere weken inplannen"}
+                  onClick={() => setShowMultiWeekBlockModal(true)}
+                >
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="1" y="2" width="14" height="13" rx="2" />
+                    <path d="M1 6h14M5 1v2M11 1v2M4.5 9.5h2M9.5 9.5h2M4.5 12h2M9.5 12h2" />
+                  </svg>
+                </button>
               </div>
               <p className="text-xs text-slate-500">
                 {t("Eindtijd wordt automatisch 1 uur na begintijd ingesteld. Aanpassen mag altijd.")}
@@ -4620,6 +4640,40 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         </div>
         ) : null}
       </div>
+
+      {showMultiWeekBlockModal ? (
+        <MultiWeekPlanModal
+          mode="block"
+          language={language}
+          currentWeekMonday={payload?.week?.startDate ?? todayIsoForTimezone("Europe/Amsterdam")}
+          onClose={() => setShowMultiWeekBlockModal(false)}
+          onSubmit={async (formPayload) => {
+            const { response, json } = await fetchJsonWithTimeout<{
+              data?: { count: number };
+              error?: string;
+            }>(
+              "/api/hour-blocks/multi-week",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formPayload),
+              },
+            );
+
+            if (!response.ok) {
+              throw new Error((json as { error?: string }).error ?? "Aanmaken mislukt.");
+            }
+
+            const count = (json as { data?: { count: number } }).data?.count ?? 0;
+            setNotice(
+              language === "en"
+                ? `${count} block${count === 1 ? "" : "s"} added.`
+                : `${count} uurblok${count === 1 ? "" : "ken"} aangemaakt.`,
+            );
+            await loadData(activeWeekId);
+          }}
+        />
+      ) : null}
 
       {showMultiWeekModal ? (
         <MultiWeekPlanModal
