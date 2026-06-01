@@ -14,10 +14,10 @@
   "dependencies": {
     "@netlify/neon": "^0.1.2",
     "@node-rs/argon2": "^2.0.2",
-    "@vercel/analytics": "^2.0.1",
+    "@vercel/analytics": "^1.1.4",
     "exceljs": "^4.4.0",
     "idb": "^8.0.3",
-    "next": "^16.2.3",
+    "next": "^9.3.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "zod": "^4.3.6"
@@ -34,5 +34,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.4"
+  },
+  "overrides": {
+    "uuid": ">=11.1.1"
   }
 }
