@@ -20,6 +20,7 @@ import { WeekScrollStrip } from "@/components/weekplanner/WeekScrollStrip";
 import { ProjectCombobox } from "@/components/weekplanner/ProjectCombobox";
 import { AssigneeTagInput } from "@/components/weekplanner/AssigneeTagInput";
 import { ThoughtInbox } from "@/components/weekplanner/ThoughtInbox";
+import { MultiWeekPlanModal } from "@/components/weekplanner/MultiWeekPlanModal";
 import {
   getLocale,
   getMonthLabels,
@@ -883,6 +884,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [blockAssignees, setBlockAssignees] = useState<string[]>([]);
   const [blockMultiDay, setBlockMultiDay] = useState(false);
   const [blockMultiDaySelection, setBlockMultiDaySelection] = useState<Set<Weekday>>(new Set());
+  const [showMultiWeekModal, setShowMultiWeekModal] = useState(false);
 
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [weekSnapshots, setWeekSnapshots] = useState<Record<string, WeekDetailPayload>>({});
@@ -3069,6 +3071,25 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                 >
                   {t("Taak toevoegen")}
                 </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  title={language === "en" ? "Plan across multiple weeks" : "Inplannen over meerdere weken"}
+                  onClick={() => setShowMultiWeekModal(true)}
+                >
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="1" y="2" width="14" height="13" rx="2" />
+                    <path d="M1 6h14M5 1v2M11 1v2M4.5 9.5h2M9.5 9.5h2M4.5 12h2M9.5 12h2" />
+                  </svg>
+                </button>
               </div>
 
               {/* Extra options — collapsible */}
@@ -4599,6 +4620,39 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         </div>
         ) : null}
       </div>
+
+      {showMultiWeekModal ? (
+        <MultiWeekPlanModal
+          language={language}
+          currentWeekMonday={payload?.week?.startDate ?? todayIsoForTimezone("Europe/Amsterdam")}
+          onClose={() => setShowMultiWeekModal(false)}
+          onSubmit={async (formPayload) => {
+            const { response, json } = await fetchJsonWithTimeout<{
+              data?: { count: number };
+              error?: string;
+            }>(
+              "/api/tasks/multi-week",
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formPayload),
+              },
+            );
+
+            if (!response.ok) {
+              throw new Error((json as { error?: string }).error ?? "Aanmaken mislukt.");
+            }
+
+            const count = (json as { data?: { count: number } }).data?.count ?? 0;
+            setNotice(
+              language === "en"
+                ? `${count} task${count === 1 ? "" : "s"} added.`
+                : `${count} taak${count === 1 ? "" : "en"} aangemaakt.`,
+            );
+            await loadData(activeWeekId);
+          }}
+        />
+      ) : null}
 
       {selectedPlannerDayDetail ? (
         <DayDetailModal
