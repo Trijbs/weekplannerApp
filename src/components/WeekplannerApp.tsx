@@ -880,6 +880,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [mergeModalProject, setMergeModalProject] = useState<string | null>(null);
   const [mergeTargets, setMergeTargets] = useState<Set<string>>(new Set());
+  const [renameModalProject, setRenameModalProject] = useState<string | null>(null);
+  const [renameModalValue, setRenameModalValue] = useState("");
   // Block form extra fields
   const [blockAssignees, setBlockAssignees] = useState<string[]>([]);
   const [blockMultiDay, setBlockMultiDay] = useState(false);
@@ -3514,6 +3516,16 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                             type="button"
                             className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50"
                             onClick={() => {
+                              setRenameModalProject(item.projectName);
+                              setRenameModalValue(item.projectName);
+                            }}
+                          >
+                            {t("Hernoemen")}
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-500 hover:bg-slate-50"
+                            onClick={() => {
                               setMergeModalProject(item.projectName);
                               setMergeTargets(new Set());
                             }}
@@ -3541,6 +3553,74 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   <p className="text-sm text-slate-500">{t("Nog geen data")}</p>
                 )}
               </div>
+
+              {/* Rename modal */}
+              {renameModalProject ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+                  <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                    <h3 className="font-semibold text-slate-900">{t("Project hernoemen")}</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {t("Alle uren onder")} <strong>{renameModalProject}</strong> {t("krijgen de nieuwe naam.")}
+                    </p>
+                    <input
+                      type="text"
+                      className="mt-4 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                      value={renameModalValue}
+                      autoFocus
+                      onChange={(event) => setRenameModalValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setRenameModalProject(null);
+                      }}
+                    />
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        type="button"
+                        className="flex-1 rounded-xl bg-slate-900 px-4 py-2 text-sm text-white disabled:opacity-50"
+                        disabled={!renameModalValue.trim() || renameModalValue.trim() === renameModalProject}
+                        onClick={() => {
+                          const oldName = renameModalProject;
+                          const newName = renameModalValue.trim();
+                          void (async () => {
+                            for (const entry of allHourEntries) {
+                              if (entry.projectName.trim() === oldName) {
+                                await sendMutation(
+                                  `/api/hours/${entry.id}`,
+                                  "PATCH",
+                                  { projectName: newName },
+                                  "",
+                                  { silent: true },
+                                );
+                              }
+                            }
+                            for (const block of allHourBlocks) {
+                              if (block.projectText.trim() === oldName) {
+                                await sendMutation(
+                                  `/api/hour-blocks/${block.id}`,
+                                  "PATCH",
+                                  { projectText: newName },
+                                  "",
+                                  { silent: true },
+                                );
+                              }
+                            }
+                            setRenameModalProject(null);
+                            setRenameModalValue("");
+                          })();
+                        }}
+                      >
+                        {t("Opslaan")}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700"
+                        onClick={() => setRenameModalProject(null)}
+                      >
+                        {t("Annuleren")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Merge modal */}
               {mergeModalProject ? (
