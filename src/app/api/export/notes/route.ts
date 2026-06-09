@@ -1,3 +1,4 @@
+import type { WeekRecord, HourEntry } from "@/lib/db/types";
 import { ensureAuth } from "@/lib/api/guards";
 import { fail, parseError } from "@/lib/api/http";
 import { db } from "@/lib/db/repository";
@@ -5,13 +6,14 @@ import {
   buildExportFilename,
   buildNotesDateRangeBounds,
   buildNotesExportPreview,
-  collectNoteExportItems,
   filterNotesForExport,
   getExportContentType,
   getTodayInTimezone,
+  noteTimestampMs,
   parseNotesExportFormat,
   renderNotesExport,
   validateNotesDateRange,
+  type NoteExportItem,
 } from "@/lib/export/notes";
 
 const DEFAULT_TIMEZONE = "Europe/Amsterdam";
@@ -30,6 +32,45 @@ function translateRangeError(message: string, language: "nl" | "en"): string {
     return "Invalid end date.";
   }
   return message;
+}
+
+function weeksOverlappingRange(weeks: WeekRecord[], from: string | null, to: string | null): WeekRecord[] {
+  if (!from && !to) {
+    return weeks;
+  }
+  return weeks.filter((week) => {
+    if (from && week.endDate < from) {
+      return false;
+    }
+    if (to && week.startDate > to) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function collectNotesFromEntries(week: WeekRecord, entries: HourEntry[]): NoteExportItem[] {
+  return entries
+    .filter((entry) => entry.noteText.trim().length > 0)
+    .map((entry) => ({
+      id: entry.id,
+      dayDate: entry.dayDate,
+      weekday: entry.weekday,
+      weekLabel: week.weekLabel,
+      weekKey: week.weekKey,
+      projectName: entry.projectName.trim(),
+      noteText: entry.noteText.trim(),
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    }))
+    .sort(
+      (a, b) =>
+        a.dayDate.localeCompare(b.dayDate) ||
+        a.weekKey.localeCompare(b.weekKey) ||
+        a.projectName.localeCompare(b.projectName, "nl") ||
+        noteTimestampMs({ createdAt: a.createdAt, updatedAt: a.updatedAt }) -
+          noteTimestampMs({ createdAt: b.createdAt, updatedAt: b.updatedAt }),
+    );
 }
 
 export async function GET(request: Request) {
@@ -61,9 +102,14 @@ export async function GET(request: Request) {
       return fail(error, 400);
     }
 
-    const weeks = await db.listWeeks();
-    const aggregates = await Promise.all(weeks.map((week) => db.getWeekAggregate(week.id)));
-    const allNotes = collectNoteExportItems(weeks, aggregates);
+    const allWeeks = await db.listWeeks();
+    const relevantWeeks = weeksOverlappingRange(allWeeks, range.from, range.to);
+    const weeklyEntries = await Promise.all(
+      relevantWeeks.map((week) =>
+        db.getHoursByWeek(week.id).then((result) => ({ week, entries: result.entries })),
+      ),
+    );
+    const allNotes = weeklyEntries.flatMap(({ week, entries }) => collectNotesFromEntries(week, entries));
     const bounds = buildNotesDateRangeBounds(range, timezone);
     const notes = filterNotesForExport(allNotes, bounds);
 

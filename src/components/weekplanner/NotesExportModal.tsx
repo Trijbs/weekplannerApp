@@ -271,25 +271,30 @@ export function NotesExportModal({ language, timezone, onClose }: NotesExportMod
           </div>
 
           {preset === "custom" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm text-slate-700">
-                {t("Van")}
-                <input
-                  type="date"
-                  value={fromDate}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  onChange={(event) => setFromDate(event.target.value)}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-slate-700">
-                {t("Tot")}
-                <input
-                  type="date"
-                  value={toDate}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                  onChange={(event) => setToDate(event.target.value)}
-                />
-              </label>
+            <div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1 text-sm text-slate-700">
+                  {t("Van")}
+                  <input
+                    type="date"
+                    value={fromDate}
+                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    onChange={(event) => setFromDate(event.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm text-slate-700">
+                  {t("Tot")}
+                  <input
+                    type="date"
+                    value={toDate}
+                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                    onChange={(event) => setToDate(event.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                {language === "en" ? "Format: MM/DD/YYYY" : "Formaat: DD/MM/JJJJ"}
+              </p>
             </div>
           ) : null}
 
