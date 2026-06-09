@@ -10,7 +10,7 @@ import {
   nowIso,
 } from "@/lib/db/helpers";
 import { buildHoursSummary } from "@/lib/db/summary";
-import type { DatabaseRepository } from "@/lib/db/repository.interface";
+import type { DatabaseRepository, NotesCountBounds } from "@/lib/db/repository.interface";
 import type {
   AppSettings,
   DayTask,
@@ -462,6 +462,34 @@ export const localDb: DatabaseRepository = {
         hourEntries: sortHours(state.hourEntries.filter((entry) => familyIds.has(entry.weekId))),
         history: state.taskHistory.filter((item) => familyIds.has(item.weekId)).slice(0, 250),
       };
+    });
+  },
+
+  async countNotesForExport(bounds: NotesCountBounds): Promise<number> {
+    return query((state) => {
+      if (bounds.startMs == null && bounds.endMs == null) {
+        return state.hourEntries.filter((e) => e.noteText.trim().length > 0).length;
+      }
+      return state.hourEntries.filter((entry) => {
+        if (entry.noteText.trim().length === 0) {
+          return false;
+        }
+        const createdMs = Date.parse(entry.createdAt);
+        const updatedMs = Date.parse(entry.updatedAt);
+        const timestamps = [createdMs, updatedMs].filter((value) => Number.isFinite(value));
+        if (!timestamps.length) {
+          return false;
+        }
+        return timestamps.some((value) => {
+          if (bounds.startMs != null && value < bounds.startMs) {
+            return false;
+          }
+          if (bounds.endMs != null && value > bounds.endMs) {
+            return false;
+          }
+          return true;
+        });
+      }).length;
     });
   },
 

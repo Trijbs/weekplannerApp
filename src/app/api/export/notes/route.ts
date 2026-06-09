@@ -102,6 +102,14 @@ export async function GET(request: Request) {
       return fail(error, 400);
     }
 
+    const bounds = buildNotesDateRangeBounds(range, timezone);
+
+    if (preview) {
+      const count = await db.countNotesForExport(bounds);
+      const previewData = buildNotesExportPreview(count, range, timezone, language);
+      return Response.json(previewData, { status: 200 });
+    }
+
     const allWeeks = await db.listWeeks();
     const relevantWeeks = weeksOverlappingRange(allWeeks, range.from, range.to);
     const weeklyEntries = await Promise.all(
@@ -110,13 +118,7 @@ export async function GET(request: Request) {
       ),
     );
     const allNotes = weeklyEntries.flatMap(({ week, entries }) => collectNotesFromEntries(week, entries));
-    const bounds = buildNotesDateRangeBounds(range, timezone);
     const notes = filterNotesForExport(allNotes, bounds);
-
-    if (preview) {
-      const previewData = buildNotesExportPreview(notes.length, range, timezone, language);
-      return Response.json(previewData, { status: 200 });
-    }
 
     const today = getTodayInTimezone(timezone);
     const output = renderNotesExport(notes, format, timezone);

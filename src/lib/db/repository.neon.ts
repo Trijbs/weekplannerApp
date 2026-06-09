@@ -1,7 +1,7 @@
 import { neon } from "@netlify/neon";
 import { buildHoursSummary } from "@/lib/db/summary";
 import { clampHours, computeDiff, hasChanges, isoDateForTimezone, normalizeText, nowIso } from "@/lib/db/helpers";
-import type { DatabaseRepository } from "@/lib/db/repository.interface";
+import type { DatabaseRepository, NotesCountBounds } from "@/lib/db/repository.interface";
 import type {
   AppSettings,
   ChangeMap,
@@ -833,6 +833,31 @@ export const neonDb: DatabaseRepository = {
       hourEntries,
       history,
     };
+  },
+
+  async countNotesForExport(bounds: NotesCountBounds): Promise<number> {
+    const startMs = bounds.startMs != null ? Math.floor(bounds.startMs) : null;
+    const endMs = bounds.endMs != null ? Math.ceil(bounds.endMs) : null;
+
+    const row = await queryOne<{ cnt: number }>(
+      `
+        select count(*) as cnt from hour_entries
+        where note_text != ''
+        and (
+          (
+            ($1::bigint is null or (extract(epoch from created_at) * 1000)::bigint >= $1::bigint)
+            and ($2::bigint is null or (extract(epoch from created_at) * 1000)::bigint <= $2::bigint)
+          )
+          or (
+            ($1::bigint is null or (extract(epoch from updated_at) * 1000)::bigint >= $1::bigint)
+            and ($2::bigint is null or (extract(epoch from updated_at) * 1000)::bigint <= $2::bigint)
+          )
+        )
+      `,
+      [startMs, endMs],
+      "Kan notities niet tellen",
+    );
+    return row ? Number(row.cnt) : 0;
   },
 
   async createTask(weekId: string, input: DayTaskInput, actor: HistoryActor): Promise<DayTask> {

@@ -26,6 +26,11 @@ import type {
   WeekRecord,
 } from "@/lib/db/types";
 
+export type NotesCountBounds = {
+  startMs: number | null;
+  endMs: number | null;
+};
+
 export interface DatabaseRepository {
   getAppSettings(): Promise<AppSettings | null>;
   setPinHash(pinHash: string): Promise<AppSettings>;
@@ -59,6 +64,7 @@ export interface DatabaseRepository {
   listWeeks(): Promise<WeekRecord[]>;
   getCurrentWeek(): Promise<WeekRecord | null>;
   getWeekAggregate(weekId: string): Promise<WeekAggregate | null>;
+  countNotesForExport(bounds: NotesCountBounds): Promise<number>;
   createTask(weekId: string, input: DayTaskInput, actor: HistoryActor): Promise<DayTask>;
   getTaskById(taskId: string): Promise<DayTask | null>;
   updateTask(taskId: string, patch: DayTaskPatch, actor: HistoryActor): Promise<DayTask | null>;
