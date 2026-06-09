@@ -76,7 +76,7 @@ export async function GET(request: Request) {
     const output = renderNotesExport(notes, format, timezone);
     const filename = buildExportFilename(format, today);
 
-    return new Response(output, {
+    return new Response(output instanceof Uint8Array ? new Blob([new Uint8Array(output)]) : output, {
       status: 200,
       headers: {
         "Content-Type": getExportContentType(format),
