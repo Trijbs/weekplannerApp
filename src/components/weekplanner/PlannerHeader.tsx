@@ -21,7 +21,7 @@ type PlannerHeaderProps = {
   hasPreviousWeek: boolean;
   hasNextWeek: boolean;
   exportHref: string | null;
-  notesExportHref: string | null;
+  onOpenNotesExport?: () => void;
   queueCount: number;
   isOnline: boolean;
   timezone: string;
@@ -106,7 +106,7 @@ export function PlannerHeader({
   hasPreviousWeek,
   hasNextWeek,
   exportHref,
-  notesExportHref,
+  onOpenNotesExport,
   queueCount,
   isOnline,
   timezone,
@@ -290,14 +290,17 @@ export function PlannerHeader({
                     {t("Export CSV")}
                   </a>
                 ) : null}
-                {notesExportHref ? (
-                  <a
-                    href={notesExportHref}
-                    className="flex items-center rounded-xl bg-emerald-300 px-3 py-2 text-sm font-medium text-slate-900 hover:bg-emerald-200"
-                    onClick={() => setMenuOpen(false)}
+                {onOpenNotesExport ? (
+                  <button
+                    type="button"
+                    className="w-full rounded-xl bg-emerald-300 px-3 py-2 text-left text-sm font-medium text-slate-900 hover:bg-emerald-200"
+                    onClick={() => {
+                      onOpenNotesExport();
+                      setMenuOpen(false);
+                    }}
                   >
                     {t("Export notities")}
-                  </a>
+                  </button>
                 ) : null}
                 <button
                   type="button"

@@ -1,78 +1,86 @@
 import { ensureAuth } from "@/lib/api/guards";
-import { parseError } from "@/lib/api/http";
+import { fail, parseError } from "@/lib/api/http";
 import { db } from "@/lib/db/repository";
+import {
+  buildExportFilename,
+  buildNotesDateRangeBounds,
+  buildNotesExportPreview,
+  collectNoteExportItems,
+  filterNotesForExport,
+  getExportContentType,
+  getTodayInTimezone,
+  parseNotesExportFormat,
+  renderNotesExport,
+  validateNotesDateRange,
+} from "@/lib/export/notes";
 
-type NoteExportItem = {
-  dayDate: string;
-  weekday: string;
-  weekLabel: string;
-  weekKey: string;
-  projectName: string;
-  noteText: string;
-};
+const DEFAULT_TIMEZONE = "Europe/Amsterdam";
 
-function formatExportDate(date: string): string {
-  return new Intl.DateTimeFormat("nl-NL", {
-    timeZone: "Europe/Amsterdam",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(`${date}T12:00:00Z`));
+function translateRangeError(message: string, language: "nl" | "en"): string {
+  if (language === "nl") {
+    return message;
+  }
+  if (message === "De startdatum mag niet later zijn dan de einddatum.") {
+    return "The start date cannot be later than the end date.";
+  }
+  if (message === "Ongeldige startdatum.") {
+    return "Invalid start date.";
+  }
+  if (message === "Ongeldige einddatum.") {
+    return "Invalid end date.";
+  }
+  return message;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const authError = await ensureAuth();
     if (authError) {
       return authError;
     }
 
+    const url = new URL(request.url);
+    const preview = url.searchParams.get("preview") === "1";
+    const from = url.searchParams.get("from");
+    const to = url.searchParams.get("to");
+    const timezone = url.searchParams.get("timezone")?.trim() || DEFAULT_TIMEZONE;
+    const format = parseNotesExportFormat(url.searchParams.get("format"));
+    const language = url.searchParams.get("lang") === "en" ? "en" : "nl";
+
+    const range = {
+      from: from?.trim() || null,
+      to: to?.trim() || null,
+    };
+
+    const rangeError = validateNotesDateRange(range);
+    if (rangeError) {
+      const error = translateRangeError(rangeError, language);
+      if (preview) {
+        return Response.json({ error, count: 0, from: range.from, to: range.to, summary: "" }, { status: 400 });
+      }
+      return fail(error, 400);
+    }
+
     const weeks = await db.listWeeks();
     const aggregates = await Promise.all(weeks.map((week) => db.getWeekAggregate(week.id)));
+    const allNotes = collectNoteExportItems(weeks, aggregates);
+    const bounds = buildNotesDateRangeBounds(range, timezone);
+    const notes = filterNotesForExport(allNotes, bounds);
 
-    const notes = aggregates
-      .filter((aggregate): aggregate is NonNullable<(typeof aggregates)[number]> => Boolean(aggregate))
-      .flatMap((aggregate) =>
-        aggregate.hourEntries
-          .filter((entry) => entry.noteText.trim().length > 0)
-          .map<NoteExportItem>((entry) => ({
-            dayDate: entry.dayDate,
-            weekday: entry.weekday,
-            weekLabel: aggregate.week.weekLabel,
-            weekKey: aggregate.week.weekKey,
-            projectName: entry.projectName.trim(),
-            noteText: entry.noteText.trim(),
-          })),
-      )
-      .sort((a, b) => a.dayDate.localeCompare(b.dayDate) || a.weekKey.localeCompare(b.weekKey) || a.projectName.localeCompare(b.projectName, "nl"));
+    if (preview) {
+      const previewData = buildNotesExportPreview(notes.length, range, timezone, language);
+      return Response.json(previewData, { status: 200 });
+    }
 
-    const output = notes.length
-      ? notes
-          .map((item) =>
-            [
-              `${formatExportDate(item.dayDate)} (${item.weekday})`,
-              item.projectName ? `Project: ${item.projectName}` : null,
-              `Week: ${item.weekLabel}`,
-              item.noteText,
-            ]
-              .filter(Boolean)
-              .join("\n"),
-          )
-          .join("\n\n--------------------\n\n")
-      : "Geen reflecties of notities gevonden.";
-
-    const today = new Intl.DateTimeFormat("sv-SE", {
-      timeZone: "Europe/Amsterdam",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    const today = getTodayInTimezone(timezone);
+    const output = renderNotesExport(notes, format, timezone);
+    const filename = buildExportFilename(format, today);
 
     return new Response(output, {
       status: 200,
       headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Content-Disposition": `attachment; filename="reflecties-notities-${today}.txt"`,
+        "Content-Type": getExportContentType(format),
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
   } catch (error) {

@@ -21,6 +21,7 @@ import { ProjectCombobox } from "@/components/weekplanner/ProjectCombobox";
 import { AssigneeTagInput } from "@/components/weekplanner/AssigneeTagInput";
 import { ThoughtInbox } from "@/components/weekplanner/ThoughtInbox";
 import { MultiWeekPlanModal } from "@/components/weekplanner/MultiWeekPlanModal";
+import { NotesExportModal } from "@/components/weekplanner/NotesExportModal";
 import {
   getLocale,
   getMonthLabels,
@@ -888,6 +889,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [blockMultiDaySelection, setBlockMultiDaySelection] = useState<Set<Weekday>>(new Set());
   const [showMultiWeekModal, setShowMultiWeekModal] = useState(false);
   const [showMultiWeekBlockModal, setShowMultiWeekBlockModal] = useState(false);
+  const [showNotesExportModal, setShowNotesExportModal] = useState(false);
 
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [weekSnapshots, setWeekSnapshots] = useState<Record<string, WeekDetailPayload>>({});
@@ -2877,7 +2879,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         hasPreviousWeek={Boolean(previousWeek)}
         hasNextWeek={Boolean(nextWeek)}
         exportHref={payload?.week.id ? `/api/export/csv?weekId=${payload.week.id}` : null}
-        notesExportHref="/api/export/notes"
+        onOpenNotesExport={() => setShowNotesExportModal(true)}
         queueCount={queueCount}
         isOnline={isOnline}
         daySearchDate={daySearchDate}
@@ -4785,6 +4787,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
             );
             await loadData(activeWeekId);
           }}
+        />
+      ) : null}
+
+      {showNotesExportModal ? (
+        <NotesExportModal
+          language={language}
+          timezone={timezone}
+          onClose={() => setShowNotesExportModal(false)}
         />
       ) : null}
 
