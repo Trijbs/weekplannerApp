@@ -75,6 +75,7 @@ type DayDetailModalProps = {
   onAddTask: () => unknown;
   onTaskPatch: (taskId: string, body: Record<string, unknown>, successMessage: string) => unknown;
   onTaskDelete: (taskId: string) => unknown;
+  onNavigateToThought?: (threadId: string) => void;
 };
 
 export function DayDetailModal({
@@ -109,6 +110,7 @@ export function DayDetailModal({
   onAddTask,
   onTaskPatch,
   onTaskDelete,
+  onNavigateToThought,
 }: DayDetailModalProps) {
   const t = (text: string) => translateStatic(language, text);
 
@@ -317,6 +319,15 @@ export function DayDetailModal({
                           )
                         }
                       />
+                      {task.threadId ? (
+                        <button
+                          type="button"
+                          className="text-xs text-blue-500 hover:text-blue-700 hover:underline cursor-pointer"
+                          onClick={() => onNavigateToThought?.(task.threadId!)}
+                        >
+                          {language === "en" ? "Source: thought" : "Bron: gedachte"}
+                        </button>
+                      ) : null}
                       <input
                         key={`${task.id}-${task.updatedAt}-detail-info`}
                         defaultValue={task.info}

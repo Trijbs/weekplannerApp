@@ -11,7 +11,7 @@ export const WEEKDAYS = [
 export type Weekday = (typeof WEEKDAYS)[number];
 export type Priority = "hoog" | "middel" | "laag";
 export type TaskStatus = "open" | "bezig" | "klaar";
-export type SourceType = "manual" | "import" | "system";
+export type SourceType = "manual" | "import" | "system" | "thought";
 
 export interface AppSettings {
   id: string;
@@ -65,6 +65,7 @@ export interface DayTask {
   status: TaskStatus;
   position: number;
   source: SourceType;
+  threadId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -206,10 +207,12 @@ export interface DayTaskInput {
   status?: TaskStatus;
   position?: number;
   source?: SourceType;
+  threadId?: string | null;
 }
 
 export interface DayTaskPatch extends Partial<DayTaskInput> {
   weekId?: string;
+  threadId?: string | null;
 }
 
 export interface HourBlockInput {

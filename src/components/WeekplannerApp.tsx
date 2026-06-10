@@ -444,6 +444,7 @@ function mergeDayTasksWithHourBlocks(
       status: block.status,
       position: block.position,
       source: "system",
+      threadId: null,
       createdAt: syntheticTimestamp,
       updatedAt: syntheticTimestamp,
     });
@@ -890,6 +891,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [showMultiWeekModal, setShowMultiWeekModal] = useState(false);
   const [showMultiWeekBlockModal, setShowMultiWeekBlockModal] = useState(false);
   const [showNotesExportModal, setShowNotesExportModal] = useState(false);
+  const [highlightThreadId, setHighlightThreadId] = useState<string | null>(null);
 
   const [payload, setPayload] = useState<DashboardPayload | null>(null);
   const [weekSnapshots, setWeekSnapshots] = useState<Record<string, WeekDetailPayload>>({});
@@ -2501,7 +2503,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   );
 
   const createTaskFromThought = useCallback(
-    async (title: string, weekday: Weekday): Promise<boolean> => {
+    async (title: string, weekday: Weekday, threadId?: string): Promise<boolean> => {
       if (!payload?.week.id) {
         setError(language === "en" ? "Week data is not loaded yet." : "Weekgegevens zijn nog niet geladen.");
         return false;
@@ -2516,6 +2518,8 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           info: "Aangemaakt vanuit gedachten.",
           priority: "middel",
           status: "open",
+          source: "thought",
+          ...(threadId ? { threadId } : {}),
         },
         t("Taak toegevoegd."),
         { localUpdate: true, keepCurrentWeek: false },
@@ -2524,6 +2528,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
       return outcome.ok && !outcome.queued;
     },
     [language, payload?.week.id, sendMutation, t],
+  );
+
+  const navigateToThought = useCallback(
+    (threadId: string) => {
+      setHighlightThreadId(threadId);
+      setTab("thoughts");
+    },
+    [],
   );
 
   const updateHourBlockDeadlineWithTaskSync = useCallback(
@@ -3251,6 +3263,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
               weekdayLabels={weekdayLabels}
               translate={t}
               onCreateTask={createTaskFromThought}
+              highlightThreadId={highlightThreadId}
             />
           ) : null}
 
@@ -4838,6 +4851,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           onAddTask={() => addDetailTask()}
           onTaskPatch={patchDetailTask}
           onTaskDelete={deleteDetailTask}
+          onNavigateToThought={navigateToThought}
         />
       ) : null}
     </div>

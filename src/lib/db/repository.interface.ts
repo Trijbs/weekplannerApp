@@ -91,6 +91,8 @@ export interface DatabaseRepository {
     content: ThoughtSummaryContent,
     messageCount: number,
   ): Promise<ThoughtSummary>;
+  archiveThoughtThread(threadId: string): Promise<ThoughtThread | null>;
+  deleteThoughtThread(threadId: string): Promise<boolean>;
   upsertImportedData(
     weekId: string,
     payload: { tasks: DayTaskInput[]; hourBlocks: HourBlockInput[] },

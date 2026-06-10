@@ -506,6 +506,7 @@ export const localDb: DatabaseRepository = {
         status: input.status ?? "open",
         position: input.position ?? 0,
         source: input.source ?? "manual",
+        threadId: input.threadId ?? null,
         createdAt: nowIso(),
         updatedAt: nowIso(),
       };
@@ -547,6 +548,7 @@ export const localDb: DatabaseRepository = {
       if (patch.status) task.status = patch.status;
       if (patch.position !== undefined) task.position = patch.position;
       if (patch.source) task.source = patch.source;
+      if (patch.threadId !== undefined) task.threadId = patch.threadId;
       task.updatedAt = nowIso();
 
       const changes = computeDiff(before as unknown as Record<string, unknown>, task as unknown as Record<string, unknown>);
@@ -913,6 +915,31 @@ export const localDb: DatabaseRepository = {
     });
   },
 
+  async archiveThoughtThread(threadId: string): Promise<ThoughtThread | null> {
+    return mutate((state) => {
+      const thread = state.thoughtThreads.find((item) => item.id === threadId);
+      if (!thread) {
+        return null;
+      }
+      thread.status = "archived";
+      thread.updatedAt = nowIso();
+      return thread;
+    });
+  },
+
+  async deleteThoughtThread(threadId: string): Promise<boolean> {
+    return mutate((state) => {
+      const index = state.thoughtThreads.findIndex((item) => item.id === threadId);
+      if (index < 0) {
+        return false;
+      }
+      state.thoughtThreads.splice(index, 1);
+      state.thoughtMessages = state.thoughtMessages.filter((item) => item.threadId !== threadId);
+      state.thoughtSummaries = state.thoughtSummaries.filter((item) => item.threadId !== threadId);
+      return true;
+    });
+  },
+
   async upsertImportedData(
     weekId: string,
     payload: { tasks: DayTaskInput[]; hourBlocks: HourBlockInput[] },
@@ -944,6 +971,7 @@ export const localDb: DatabaseRepository = {
             status: input.status ?? "open",
             position: input.position ?? 0,
             source: "import",
+            threadId: null,
             createdAt: nowIso(),
             updatedAt: nowIso(),
           };
