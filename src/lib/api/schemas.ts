@@ -6,6 +6,8 @@ export const taskStatusSchema = z.enum(["open", "bezig", "klaar"]);
 
 export const pinSchema = z.string().regex(/^\d{6}$/, "PIN moet exact 6 cijfers zijn");
 
+export const sourceSchema = z.enum(["manual", "import", "system", "thought"]);
+
 export const taskCreateSchema = z.object({
   weekday: weekdaySchema,
   title: z.string().min(1).max(180),
@@ -14,6 +16,8 @@ export const taskCreateSchema = z.object({
   priority: prioritySchema.optional().default("middel"),
   status: taskStatusSchema.optional().default("open"),
   position: z.number().int().min(0).optional().default(0),
+  source: sourceSchema.optional().default("manual"),
+  threadId: z.string().uuid().nullable().optional(),
 });
 
 export const taskPatchSchema = z.object({
@@ -24,6 +28,8 @@ export const taskPatchSchema = z.object({
   priority: prioritySchema.optional(),
   status: taskStatusSchema.optional(),
   position: z.number().int().min(0).optional(),
+  source: sourceSchema.optional(),
+  threadId: z.string().uuid().nullable().optional(),
   expectedUpdatedAt: z.string().min(1).optional(),
 });
 

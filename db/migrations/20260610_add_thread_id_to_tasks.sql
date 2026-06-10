@@ -1,0 +1,1 @@
+ALTER TABLE day_tasks ADD COLUMN thread_id UUID REFERENCES thought_threads(id) ON DELETE SET NULL;

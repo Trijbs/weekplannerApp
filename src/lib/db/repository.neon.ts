@@ -220,6 +220,7 @@ function mapTask(row: SqlRow): DayTask {
     status: String(row.status) as DayTask["status"],
     position: Number(row.position ?? 0),
     source: String(row.source ?? "manual") as DayTask["source"],
+    threadId: row.thread_id ? String(row.thread_id) : null,
     createdAt: toIsoDateTime(row.created_at),
     updatedAt: toIsoDateTime(row.updated_at),
   };
@@ -872,8 +873,9 @@ export const neonDb: DatabaseRepository = {
           priority,
           status,
           position,
-          source
-        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          source,
+          thread_id
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         returning *
       `,
       [
@@ -886,6 +888,7 @@ export const neonDb: DatabaseRepository = {
         input.status ?? "open",
         input.position ?? 0,
         input.source ?? "manual",
+        input.threadId ?? null,
       ],
       "Kan taak niet aanmaken",
     );
@@ -934,6 +937,7 @@ export const neonDb: DatabaseRepository = {
       status: patch.status ?? existing.status,
       position: patch.position !== undefined ? patch.position : existing.position,
       source: patch.source ?? existing.source,
+      threadId: patch.threadId !== undefined ? patch.threadId : existing.threadId,
     };
 
     const row = await queryOne(
@@ -948,7 +952,8 @@ export const neonDb: DatabaseRepository = {
             status = $8,
             position = $9,
             source = $10,
-            updated_at = $11
+            thread_id = $11,
+            updated_at = $12
         where id = $1
         returning *
       `,
@@ -963,6 +968,7 @@ export const neonDb: DatabaseRepository = {
         next.status,
         next.position,
         next.source,
+        next.threadId,
         nowIso(),
       ],
       "Kan taak niet bijwerken",
@@ -1490,6 +1496,31 @@ export const neonDb: DatabaseRepository = {
     return created;
   },
 
+  async archiveThoughtThread(threadId: string): Promise<ThoughtThread | null> {
+    const row = await queryOne(
+      `update thought_threads set status = 'archived', updated_at = $2 where id = $1 returning *`,
+      [threadId, nowIso()],
+      "Kan gesprek niet archiveren",
+    );
+
+    return row ? mapThoughtThread(row) : null;
+  },
+
+  async deleteThoughtThread(threadId: string): Promise<boolean> {
+    const existing = await this.getThoughtThreadById(threadId);
+    if (!existing) {
+      return false;
+    }
+
+    await execute(
+      `delete from thought_threads where id = $1`,
+      [threadId],
+      "Kan gesprek niet verwijderen",
+    );
+
+    return true;
+  },
+
   async upsertImportedData(
     weekId: string,
     payload: { tasks: DayTaskInput[]; hourBlocks: HourBlockInput[] },
@@ -1522,8 +1553,9 @@ export const neonDb: DatabaseRepository = {
               priority,
               status,
               position,
-              source
-            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              source,
+              thread_id
+            ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             returning *
           `,
           [
@@ -1536,6 +1568,7 @@ export const neonDb: DatabaseRepository = {
             input.status ?? "open",
             input.position ?? 0,
             "import",
+            null,
           ],
           "Kan import taak niet aanmaken",
         );
@@ -1570,6 +1603,7 @@ export const neonDb: DatabaseRepository = {
         status: input.status ?? match.status,
         position: input.position !== undefined ? input.position : match.position,
         source: "import" as DayTask["source"],
+        threadId: match.threadId,
       };
 
       const row = await queryOne(
@@ -1584,7 +1618,8 @@ export const neonDb: DatabaseRepository = {
               status = $8,
               position = $9,
               source = $10,
-              updated_at = $11
+              thread_id = $11,
+              updated_at = $12
           where id = $1
           returning *
         `,
@@ -1599,6 +1634,7 @@ export const neonDb: DatabaseRepository = {
           next.status,
           next.position,
           next.source,
+          next.threadId,
           nowIso(),
         ],
         "Kan import taak niet bijwerken",

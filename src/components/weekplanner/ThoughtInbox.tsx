@@ -9,6 +9,7 @@ import type {
   WeekRecord,
 } from "@/lib/db/types";
 import { WEEKDAYS } from "@/lib/db/types";
+import { AnimatedDeleteButton } from "@/components/weekplanner/AnimatedDeleteButton";
 
 type ThoughtThreadDetail = {
   thread: ThoughtThread;
@@ -20,7 +21,8 @@ type ThoughtInboxProps = {
   currentWeek: WeekRecord | null;
   weekdayLabels: Record<Weekday, string>;
   translate: (text: string) => string;
-  onCreateTask: (title: string, weekday: Weekday) => Promise<boolean>;
+  onCreateTask: (title: string, weekday: Weekday, threadId?: string) => Promise<boolean>;
+  highlightThreadId?: string | null;
 };
 
 type ApiResponse<T> = {
@@ -86,6 +88,7 @@ export function ThoughtInbox({
   weekdayLabels,
   translate,
   onCreateTask,
+  highlightThreadId,
 }: ThoughtInboxProps) {
   const t = translate;
   const [threads, setThreads] = useState<ThoughtThread[]>([]);
@@ -98,6 +101,16 @@ export function ThoughtInbox({
   const [summarizing, setSummarizing] = useState(false);
   const [promotingTask, setPromotingTask] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (highlightThreadId) {
+      setActiveThreadId(highlightThreadId);
+      setHighlightedId(highlightThreadId);
+      const timer = setTimeout(() => setHighlightedId(null), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightThreadId]);
 
   const latestSummary = detail?.summaries[0] ?? null;
   const threadGroups = useMemo(() => groupThreadsByDate(threads, t), [threads, t]);
@@ -119,6 +132,55 @@ export function ThoughtInbox({
       setActiveThreadId(data.threads[0].id);
     }
   }, [activeThreadId]);
+
+  const [archivingThreadId, setArchivingThreadId] = useState<string | null>(null);
+  const [, setDeletingThreadId] = useState<string | null>(null);
+
+  const archiveThread = useCallback(async (threadId: string) => {
+    setArchivingThreadId(threadId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/thoughts/threads/${threadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "archived" }),
+      });
+      if (!response.ok) {
+        throw new Error(t("Archiveren mislukt."));
+      }
+      if (activeThreadId === threadId) {
+        setActiveThreadId(null);
+        setDetail(null);
+      }
+      await loadThreads();
+    } catch (archiveError) {
+      setError(archiveError instanceof Error ? archiveError.message : t("Archiveren mislukt."));
+    } finally {
+      setArchivingThreadId(null);
+    }
+  }, [activeThreadId, loadThreads, t]);
+
+  const deleteThread = useCallback(async (threadId: string) => {
+    setDeletingThreadId(threadId);
+    setError(null);
+    try {
+      const response = await fetch(`/api/thoughts/threads/${threadId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        throw new Error(t("Verwijderen mislukt."));
+      }
+      if (activeThreadId === threadId) {
+        setActiveThreadId(null);
+        setDetail(null);
+      }
+      await loadThreads();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : t("Verwijderen mislukt."));
+    } finally {
+      setDeletingThreadId(null);
+    }
+  }, [activeThreadId, loadThreads, t]);
 
   const loadDetail = useCallback(async (threadId: string) => {
     const response = await fetch(`/api/thoughts/threads/${threadId}/messages`, { cache: "no-store" });
@@ -265,23 +327,33 @@ export function ThoughtInbox({
                   </p>
                   <div className="space-y-1.5">
                     {group.threads.map((thread) => (
-                      <button
-                        key={thread.id}
-                        type="button"
-                        className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition ${
-                          thread.id === activeThreadId
-                            ? "border-blue-300 bg-blue-50 text-slate-950"
-                            : "border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-100"
-                        }`}
-                        onClick={() => setActiveThreadId(thread.id)}
-                      >
-                        <span className="block truncate font-semibold leading-5">
-                          {thread.title === "Nieuwe gedachten" ? t("Nieuwe gedachten") : thread.title || t("Zonder titel")}
-                        </span>
-                        <span className="mt-1 block text-xs text-slate-400">
-                          {formatShortDate(thread.updatedAt)}
-                        </span>
-                      </button>
+                      <div key={thread.id} className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm transition ${
+                            highlightedId === thread.id ? "animate-pulse bg-yellow-50 border-yellow-400"
+                            : thread.id === activeThreadId
+                              ? "border-blue-300 bg-blue-50 text-slate-950"
+                              : "border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-100"
+                          }`}
+                          onClick={() => setActiveThreadId(thread.id)}
+                        >
+                          <span className="block truncate font-semibold leading-5">
+                            {thread.title === "Nieuwe gedachten" ? t("Nieuwe gedachten") : thread.title || t("Zonder titel")}
+                          </span>
+                          <span className="mt-1 block text-xs text-slate-400">
+                            {formatShortDate(thread.updatedAt)}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded px-1.5 py-1 text-[10px] text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
+                          disabled={archivingThreadId === thread.id}
+                          onClick={(event) => { event.stopPropagation(); void archiveThread(thread.id); }}
+                        >
+                          {archivingThreadId === thread.id ? "…" : t("Archiveer")}
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -313,6 +385,14 @@ export function ThoughtInbox({
             >
               {summarizing ? t("Samenvatten...") : t("Samenvatten")}
             </button>
+            {activeThreadId ? (
+              <AnimatedDeleteButton
+                onConfirm={() => void deleteThread(activeThreadId)}
+                label={t("Verwijderen")}
+                confirmLabel={t("Zeker?")}
+                size="sm"
+              />
+            ) : null}
           </div>
 
           {/* Input area */}
@@ -424,7 +504,7 @@ export function ThoughtInbox({
                             disabled={promotingTask === item}
                             onClick={() => {
                               setPromotingTask(item);
-                              void onCreateTask(item, getActionDay(item)).finally(() =>
+                              void onCreateTask(item, getActionDay(item), activeThreadId ?? undefined).finally(() =>
                                 setPromotingTask(null),
                               );
                             }}
