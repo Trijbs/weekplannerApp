@@ -2504,15 +2504,11 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   );
 
   const createTaskFromThought = useCallback(
-    async (title: string, weekday: Weekday, threadId?: string, deadlineAtLocal?: string): Promise<boolean> => {
+    async (title: string, weekday: Weekday, threadId?: string, scheduleAtLocal?: string): Promise<boolean> => {
       if (!payload?.week.id) {
         setError(language === "en" ? "Week data is not loaded yet." : "Weekgegevens zijn nog niet geladen.");
         return false;
       }
-
-      const deadlineAt = deadlineAtLocal
-        ? localInputToTimezoneIso(deadlineAtLocal, "Europe/Amsterdam")
-        : null;
 
       const taskOutcome = await sendMutation(
         `/api/weeks/${payload.week.id}/tasks`,
@@ -2524,7 +2520,6 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           priority: "middel",
           status: "open",
           source: "thought",
-          deadlineAt,
           ...(threadId ? { threadId } : {}),
         },
         t("Taak toegevoegd."),
@@ -2533,11 +2528,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
       const taskOk = taskOutcome.ok && !taskOutcome.queued;
 
-      if (taskOk && deadlineAtLocal) {
+      if (taskOk && scheduleAtLocal) {
         let timeStart = "09:00";
         let timeEnd = "10:00";
+        const dayDate = scheduleAtLocal.split("T")[0] || null;
 
-        const timeMatch = deadlineAtLocal.match(/T(\d{2}):(\d{2})$/);
+        const timeMatch = scheduleAtLocal.match(/T(\d{2}):(\d{2})$/);
         if (timeMatch) {
           const hour = Number(timeMatch[1]);
           const minute = Number(timeMatch[2]);
@@ -2547,17 +2543,19 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           timeEnd = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
         }
 
+        const scheduleWeekday = dayDate ? weekdayFromIsoDate(dayDate) ?? weekday : weekday;
+
         await sendMutation(
           `/api/weeks/${payload.week.id}/hour-blocks`,
           "POST",
           {
-            weekday,
-            dayDate: deadlineAtLocal.split("T")[0] || null,
+            weekday: scheduleWeekday,
+            dayDate,
             timeStart,
             timeEnd,
             taskText: title,
             projectText: "",
-            deadlineAt,
+            deadlineAt: null,
             status: "open",
             source: "thought",
           },

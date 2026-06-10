@@ -21,7 +21,7 @@ type ThoughtInboxProps = {
   currentWeek: WeekRecord | null;
   weekdayLabels: Record<Weekday, string>;
   translate: (text: string) => string;
-  onCreateTask: (title: string, weekday: Weekday, threadId?: string, deadlineAt?: string) => Promise<boolean>;
+  onCreateTask: (title: string, weekday: Weekday, threadId?: string, scheduleAt?: string) => Promise<boolean>;
   highlightThreadId?: string | null;
 };
 
@@ -97,7 +97,7 @@ export function ThoughtInbox({
   const [draft, setDraft] = useState("");
   // Per-action day selectors — keyed by action text so each action has its own day
   const [actionDays, setActionDays] = useState<Record<string, Weekday>>({});
-  const [actionDeadlines, setActionDeadlines] = useState<Record<string, string>>({});
+  const [actionScheduleAt, _setScheduleAt] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [promotingTask, setPromotingTask] = useState<string | null>(null);
@@ -125,8 +125,8 @@ export function ThoughtInbox({
     setActionDays((prev) => ({ ...prev, [action]: day }));
   }, []);
 
-  const setActionDeadline = useCallback((action: string, deadline: string) => {
-    setActionDeadlines((prev) => ({ ...prev, [action]: deadline }));
+  const setActionScheduleAt = useCallback((action: string, schedule: string) => {
+    _setScheduleAt((prev) => ({ ...prev, [action]: schedule }));
   }, []);
 
   const loadThreads = useCallback(async () => {
@@ -554,9 +554,8 @@ export function ThoughtInbox({
                           <input
                             type="datetime-local"
                             className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
-                            value={actionDeadlines[item] ?? ""}
-                            onChange={(event) => setActionDeadline(item, event.target.value)}
-                            placeholder={t("Datum/tijd (optioneel)")}
+                            value={actionScheduleAt[item] ?? ""}
+                            onChange={(event) => setActionScheduleAt(item, event.target.value)}
                           />
                           <button
                             type="button"
@@ -564,8 +563,8 @@ export function ThoughtInbox({
                             disabled={promotingTask === item}
                             onClick={() => {
                               setPromotingTask(item);
-                              const deadline = actionDeadlines[item] || undefined;
-                              void onCreateTask(item, getActionDay(item), activeThreadId ?? undefined, deadline).finally(() =>
+                              const schedule = actionScheduleAt[item] || undefined;
+                              void onCreateTask(item, getActionDay(item), activeThreadId ?? undefined, schedule).finally(() =>
                                 setPromotingTask(null),
                               );
                             }}
