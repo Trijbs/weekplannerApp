@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   resolvePresetRange,
   validateNotesDateRange,
@@ -11,6 +11,9 @@ import type { AppLanguage } from "@/lib/i18n";
 import { translateStatic } from "@/lib/i18n";
 
 const SESSION_KEY = "weekplanner.notesExport.session";
+
+const PREVIEW_DEBOUNCE_MS = 300;
+const PREVIEW_TIMEOUT_MS = 15_000;
 
 type StoredSession = {
   preset: NotesExportPreset;
@@ -76,9 +79,24 @@ function writeStoredSession(value: StoredSession) {
   window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
 }
 
+function translateRangeError(message: string, language: AppLanguage): string {
+  if (language === "en") {
+    if (message === "De startdatum mag niet later zijn dan de einddatum.") {
+      return "The start date cannot be later than the end date.";
+    }
+    if (message === "Ongeldige startdatum.") {
+      return "Invalid start date.";
+    }
+    if (message === "Ongeldige einddatum.") {
+      return "Invalid end date.";
+    }
+  }
+  return message;
+}
+
 export function NotesExportModal({ language, timezone, onClose }: NotesExportModalProps) {
   const stored = useMemo(() => readStoredSession(), []);
-  const t = (text: string) => translateStatic(language, text);
+  const t = useCallback((text: string) => translateStatic(language, text), [language]);
 
   const [format, setFormat] = useState<NotesExportFormat>(stored?.format ?? "txt");
   const [preset, setPreset] = useState<NotesExportPreset>(stored?.preset ?? "all");
@@ -90,6 +108,8 @@ export function NotesExportModal({ language, timezone, onClose }: NotesExportMod
     loading: true,
     error: null,
   });
+
+  const lastPreviewUrlRef = useRef<string | null>(null);
 
   const resolvedRange = useMemo(
     () => resolvePresetRange(preset, timezone, fromDate, toDate),
@@ -135,32 +155,38 @@ export function NotesExportModal({ language, timezone, onClose }: NotesExportMod
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    const timeoutController = new AbortController();
 
     async function loadPreview() {
       if (rangeValidationError) {
-        const message =
-          language === "en"
-            ? rangeValidationError === "De startdatum mag niet later zijn dan de einddatum."
-              ? "The start date cannot be later than the end date."
-              : rangeValidationError === "Ongeldige startdatum."
-                ? "Invalid start date."
-                : rangeValidationError === "Ongeldige einddatum."
-                  ? "Invalid end date."
-                  : rangeValidationError
-            : rangeValidationError;
+        const message = translateRangeError(rangeValidationError, language);
         setPreview({
           count: 0,
           summary: "",
           loading: false,
           error: message,
         });
+        lastPreviewUrlRef.current = null;
         return;
       }
 
+      const url = buildPreviewUrl();
+
+      if (url === lastPreviewUrlRef.current) {
+        console.log("[EXPORT] Preview URL unchanged, skipping fetch");
+        setPreview((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      console.log("[EXPORT] Preview fetch started:", url);
       setPreview((prev) => ({ ...prev, loading: true, error: null }));
 
+      const timeoutId = window.setTimeout(() => {
+        timeoutController.abort();
+      }, PREVIEW_TIMEOUT_MS);
+
       try {
-        const response = await fetch(buildPreviewUrl(), { signal: controller.signal });
+        const response = await fetch(url, { signal: AbortSignal.any([controller.signal, timeoutController.signal]) });
         const payload = (await response.json()) as {
           count?: number;
           summary?: string;
@@ -171,16 +197,22 @@ export function NotesExportModal({ language, timezone, onClose }: NotesExportMod
           return;
         }
 
+        window.clearTimeout(timeoutId);
+
         if (!response.ok) {
+          console.log("[EXPORT ERROR] Preview fetch failed:", payload.error ?? "Unknown error");
           setPreview({
             count: 0,
             summary: "",
             loading: false,
             error: payload.error ?? t("Voorbeeld laden mislukt."),
           });
+          lastPreviewUrlRef.current = null;
           return;
         }
 
+        console.log("[EXPORT] Preview fetch completed: count =", payload.count);
+        lastPreviewUrlRef.current = url;
         setPreview({
           count: payload.count ?? 0,
           summary: payload.summary ?? "",
@@ -191,27 +223,36 @@ export function NotesExportModal({ language, timezone, onClose }: NotesExportMod
         if (cancelled || (error instanceof DOMException && error.name === "AbortError")) {
           return;
         }
+        window.clearTimeout(timeoutId);
+        const isTimeout = timeoutController.signal.aborted;
+        console.log(
+          isTimeout ? "[EXPORT ERROR] Preview fetch timeout" : "[EXPORT ERROR] Preview fetch failed",
+          error instanceof Error ? error.message : String(error),
+        );
         setPreview({
           count: 0,
           summary: "",
           loading: false,
-          error: t("Voorbeeld laden mislukt."),
+          error: isTimeout
+            ? (language === "en" ? "Preview timed out. Please try again." : "Voorbeeld laden duurde te lang. Probeer opnieuw.")
+            : t("Voorbeeld laden mislukt."),
         });
+        lastPreviewUrlRef.current = null;
       }
     }
 
-    const timeout = window.setTimeout(() => {
+    const debounceTimeout = window.setTimeout(() => {
       void loadPreview();
-    }, 200);
+    }, PREVIEW_DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
       controller.abort();
-      window.clearTimeout(timeout);
+      window.clearTimeout(debounceTimeout);
     };
   }, [buildPreviewUrl, language, rangeValidationError, t]);
 
-  const canExport = !preview.loading && !preview.error;
+  const canExport = !rangeValidationError && !preview.error;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/65 p-4" onClick={onClose}>
@@ -325,12 +366,14 @@ export function NotesExportModal({ language, timezone, onClose }: NotesExportMod
             {t("Annuleer")}
           </button>
           <a
-            href={buildExportUrl()}
-            className={`rounded-xl px-4 py-2 text-center text-sm font-medium ${
-              canExport ? "bg-emerald-500 text-white hover:bg-emerald-600" : "pointer-events-none bg-slate-200 text-slate-500"
+            href={canExport ? buildExportUrl() : undefined}
+            download={canExport ? undefined : undefined}
+            className={`inline-block rounded-xl px-4 py-2 text-center text-sm font-medium ${
+              canExport ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-slate-200 text-slate-400"
             }`}
             onClick={() => {
               if (canExport) {
+                console.log("[EXPORT] Export button clicked");
                 onClose();
               }
             }}

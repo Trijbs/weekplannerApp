@@ -17,6 +17,7 @@ import {
 } from "@/lib/export/notes";
 
 const DEFAULT_TIMEZONE = "Europe/Amsterdam";
+const EXPORT_TIMEOUT_MS = 30_000;
 
 function translateRangeError(message: string, language: "nl" | "en"): string {
   if (language === "nl") {
@@ -74,6 +75,9 @@ function collectNotesFromEntries(week: WeekRecord, entries: HourEntry[]): NoteEx
 }
 
 export async function GET(request: Request) {
+  const logPrefix = "[EXPORT]";
+  const startTime = Date.now();
+
   try {
     const authError = await ensureAuth();
     if (authError) {
@@ -88,6 +92,8 @@ export async function GET(request: Request) {
     const format = parseNotesExportFormat(url.searchParams.get("format"));
     const language = url.searchParams.get("lang") === "en" ? "en" : "nl";
 
+    console.log(`${logPrefix} Request received: preview=${preview}, format=${format}, from=${from ?? "null"}, to=${to ?? "null"}, timezone=${timezone}, lang=${language}`);
+
     const range = {
       from: from?.trim() || null,
       to: to?.trim() || null,
@@ -96,6 +102,7 @@ export async function GET(request: Request) {
     const rangeError = validateNotesDateRange(range);
     if (rangeError) {
       const error = translateRangeError(rangeError, language);
+      console.log(`${logPrefix} ERROR Date range validation failed: ${error}`);
       if (preview) {
         return Response.json({ error, count: 0, from: range.from, to: range.to, summary: "" }, { status: 400 });
       }
@@ -103,35 +110,59 @@ export async function GET(request: Request) {
     }
 
     const bounds = buildNotesDateRangeBounds(range, timezone);
+    console.log(`${logPrefix} Date range bounds: startMs=${bounds.startMs ?? "null"}, endMs=${bounds.endMs ?? "null"}`);
 
     if (preview) {
       const count = await db.countNotesForExport(bounds);
       const previewData = buildNotesExportPreview(count, range, timezone, language);
+      console.log(`${logPrefix} Preview count: ${count} (${Date.now() - startTime}ms)`);
       return Response.json(previewData, { status: 200 });
     }
 
-    const allWeeks = await db.listWeeks();
-    const relevantWeeks = weeksOverlappingRange(allWeeks, range.from, range.to);
-    const weeklyEntries = await Promise.all(
-      relevantWeeks.map((week) =>
-        db.getHoursByWeek(week.id).then((result) => ({ week, entries: result.entries })),
-      ),
-    );
-    const allNotes = weeklyEntries.flatMap(({ week, entries }) => collectNotesFromEntries(week, entries));
-    const notes = filterNotesForExport(allNotes, bounds);
+    const timeoutSignal = AbortSignal.timeout(EXPORT_TIMEOUT_MS);
 
-    const today = getTodayInTimezone(timezone);
-    const output = renderNotesExport(notes, format, timezone);
-    const filename = buildExportFilename(format, today);
+    const exportResult = await Promise.race([
+      (async () => {
+        const allWeeks = await db.listWeeks();
+        const relevantWeeks = weeksOverlappingRange(allWeeks, range.from, range.to);
+        console.log(`${logPrefix} Matching notes count: fetching from ${relevantWeeks.length} weeks`);
 
-    return new Response(output instanceof Uint8Array ? new Blob([new Uint8Array(output)]) : output, {
-      status: 200,
-      headers: {
-        "Content-Type": getExportContentType(format),
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    });
+        const weeklyEntries = await Promise.all(
+          relevantWeeks.map((week) =>
+            db.getHoursByWeek(week.id).then((result) => ({ week, entries: result.entries })),
+          ),
+        );
+        const allNotes = weeklyEntries.flatMap(({ week, entries }) => collectNotesFromEntries(week, entries));
+        const notes = filterNotesForExport(allNotes, bounds);
+
+        console.log(`${logPrefix} Notes fetched successfully: ${notes.length} notes (${Date.now() - startTime}ms)`);
+
+        const today = getTodayInTimezone(timezone);
+        const output = renderNotesExport(notes, format, timezone);
+        const filename = buildExportFilename(format, today);
+
+        console.log(`${logPrefix} Export file generated: format=${format}, size=${typeof output === "string" ? output.length : output.byteLength} bytes (${Date.now() - startTime}ms)`);
+
+        return new Response(output instanceof Uint8Array ? new Blob([new Uint8Array(output)]) : output, {
+          status: 200,
+          headers: {
+            "Content-Type": getExportContentType(format),
+            "Content-Disposition": `attachment; filename="${filename}"`,
+          },
+        });
+      })(),
+      new Promise<never>((_, reject) => {
+        timeoutSignal.addEventListener("abort", () => {
+          console.log(`${logPrefix} ERROR Export generation timed out after ${EXPORT_TIMEOUT_MS}ms`);
+          reject(new Error(`Export generation timed out after ${EXPORT_TIMEOUT_MS / 1000} seconds.`));
+        });
+      }),
+    ]);
+
+    console.log(`${logPrefix} Export completed successfully (${Date.now() - startTime}ms)`);
+    return exportResult;
   } catch (error) {
+    console.log(`[EXPORT ERROR] Export generation failed: ${error instanceof Error ? error.message : String(error)}`);
     return parseError(error);
   }
 }

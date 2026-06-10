@@ -236,3 +236,65 @@ describe("noteTimestampMs", () => {
     ).toBe(Date.parse("2026-02-01T00:00:00.000Z"));
   });
 });
+
+describe("count isolation from export", () => {
+  it("counting notes does not modify the input data", () => {
+    const notes = [
+      note({ id: "n1", createdAt: "2026-03-01T10:00:00.000Z", updatedAt: "2026-03-01T10:00:00.000Z" }),
+      note({ id: "n2", createdAt: "2026-03-15T10:00:00.000Z", updatedAt: "2026-03-15T10:00:00.000Z" }),
+    ];
+    const originalLength = notes.length;
+    const bounds = buildNotesDateRangeBounds({ from: "2026-03-01", to: "2026-03-31" }, "Europe/Amsterdam");
+    const filtered = filterNotesForExport(notes, bounds);
+    expect(filtered.length).toBe(originalLength);
+    expect(notes.length).toBe(originalLength);
+  });
+
+  it("running filterNotesForExport multiple times with same bounds produces same result", () => {
+    const notes = Array.from({ length: 50 }, (_, i) =>
+      note({
+        id: `n-${i}`,
+        createdAt: `2026-02-${String((i % 28) + 1).padStart(2, "0")}T10:00:00.000Z`,
+        updatedAt: `2026-02-${String((i % 28) + 1).padStart(2, "0")}T10:00:00.000Z`,
+      }),
+    );
+    const bounds = buildNotesDateRangeBounds({ from: "2026-02-10", to: "2026-02-20" }, "Europe/Amsterdam");
+    const first = filterNotesForExport(notes, bounds);
+    const second = filterNotesForExport(notes, bounds);
+    const third = filterNotesForExport(notes, bounds);
+    expect(first.length).toBe(second.length);
+    expect(second.length).toBe(third.length);
+    expect(first.map((n) => n.id)).toEqual(second.map((n) => n.id));
+  });
+});
+
+describe("resolvePresetRange custom date range", () => {
+  it("returns user-provided dates for custom preset", () => {
+    const result = resolvePresetRange("custom", "Europe/Amsterdam", "2026-01-15", "2026-06-30");
+    expect(result).toEqual({ from: "2026-01-15", to: "2026-06-30" });
+  });
+
+  it("returns null for missing custom dates", () => {
+    const result = resolvePresetRange("custom", "Europe/Amsterdam", "", "");
+    expect(result).toEqual({ from: null, to: null });
+  });
+
+  it("returns null for whitespace-only custom dates", () => {
+    const result = resolvePresetRange("custom", "Europe/Amsterdam", "  ", "  ");
+    expect(result).toEqual({ from: null, to: null });
+  });
+});
+
+describe("preview summary edge cases", () => {
+  it("handles zero count with date range", () => {
+    const preview = buildNotesExportPreview(0, { from: "2026-01-01", to: "2026-01-31" }, "Europe/Amsterdam", "en");
+    expect(preview.summary).toContain("0 notes");
+    expect(preview.count).toBe(0);
+  });
+
+  it("handles singular count", () => {
+    const preview = buildNotesExportPreview(1, { from: "2026-01-01", to: "2026-01-31" }, "Europe/Amsterdam", "en");
+    expect(preview.summary).toContain("1 note");
+    expect(preview.summary).not.toContain("1 notes");
+  });
+});
