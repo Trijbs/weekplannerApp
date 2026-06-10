@@ -313,11 +313,20 @@ function mapThoughtMessage(row: SqlRow): ThoughtMessage {
 
 function parseThoughtSummaryContent(value: unknown): ThoughtSummaryContent {
   const parsed = parseJsonRecord(value);
+  const validMoods: ThoughtSummaryContent["mood"][] = ["positief", "neutraal", "gestrest", "negatief"];
+  const validPriorities: ThoughtSummaryContent["priority"][] = ["hoog", "middel", "laag"];
   return {
     overview: typeof parsed.overview === "string" ? parsed.overview : "",
     ideas: Array.isArray(parsed.ideas) ? parsed.ideas.map(String) : [],
     tasks: Array.isArray(parsed.tasks) ? parsed.tasks.map(String) : [],
     planningNotes: Array.isArray(parsed.planningNotes) ? parsed.planningNotes.map(String) : [],
+    concerns: Array.isArray(parsed.concerns) ? parsed.concerns.map(String) : [],
+    questions: Array.isArray(parsed.questions) ? parsed.questions.map(String) : [],
+    decisions: Array.isArray(parsed.decisions) ? parsed.decisions.map(String) : [],
+    blocked: Array.isArray(parsed.blocked) ? parsed.blocked.map(String) : [],
+    mood: validMoods.includes(parsed.mood as ThoughtSummaryContent["mood"]) ? parsed.mood as ThoughtSummaryContent["mood"] : "neutraal",
+    priority: validPriorities.includes(parsed.priority as ThoughtSummaryContent["priority"]) ? parsed.priority as ThoughtSummaryContent["priority"] : "middel",
+    tags: Array.isArray(parsed.tags) ? parsed.tags.map(String) : [],
   };
 }
 

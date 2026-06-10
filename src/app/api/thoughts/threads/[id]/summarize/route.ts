@@ -1,6 +1,7 @@
 import { ensureAuth } from "@/lib/api/guards";
 import { ok, parseError, fail } from "@/lib/api/http";
 import { db } from "@/lib/db/repository";
+import { aiSummarizeThoughts } from "@/lib/thoughts/ai-summarize";
 import { summarizeThoughtMessages } from "@/lib/thoughts/summary";
 
 export async function POST(
@@ -24,7 +25,12 @@ export async function POST(
       return fail("Schrijf eerst een gedachte op.", 400);
     }
 
-    const content = summarizeThoughtMessages(messages);
+    const hasAiCredentials = !!process.env.CLOUDFLARE_ACCOUNT_ID && !!process.env.CLOUDFLARE_AI_API_TOKEN;
+
+    const content = hasAiCredentials
+      ? await aiSummarizeThoughts(messages)
+      : summarizeThoughtMessages(messages);
+
     const summary = await db.createThoughtSummary(params.id, content, messages.length);
     return ok({ summary }, { status: 201 });
   } catch (error) {

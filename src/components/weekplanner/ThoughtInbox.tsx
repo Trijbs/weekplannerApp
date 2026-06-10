@@ -457,7 +457,7 @@ export function ThoughtInbox({
             <div>
               <h3 className="text-base font-semibold text-slate-950">{t("Samenvatting")}</h3>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                {t("Kern, acties, ideeën en planningpunten uit je notities.")}
+                {t("Kern, acties, ideeën en meer uit je notities.")}
               </p>
             </div>
             {latestSummary ? (
@@ -474,16 +474,56 @@ export function ThoughtInbox({
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-700">{t("Kern")}</h4>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{latestSummary.content.overview}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-                    {latestSummary.content.tasks.length} {t("acties")}
-                  </span>
-                  <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-                    {latestSummary.content.ideas.length} {t("ideeën")}
-                  </span>
-                  <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
-                    {latestSummary.content.planningNotes.length} {t("planningpunten")}
-                  </span>
+                  {latestSummary.content.tasks.length ? (
+                    <span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                      {latestSummary.content.tasks.length} {t("acties")}
+                    </span>
+                  ) : null}
+                  {latestSummary.content.ideas.length ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                      {latestSummary.content.ideas.length} {t("ideeën")}
+                    </span>
+                  ) : null}
+                  {latestSummary.content.planningNotes.length ? (
+                    <span className="rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+                      {latestSummary.content.planningNotes.length} {t("planningpunten")}
+                    </span>
+                  ) : null}
+                  {latestSummary.content.concerns.length ? (
+                    <span className="rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
+                      {latestSummary.content.concerns.length} {t("zorgen")}
+                    </span>
+                  ) : null}
+                  {latestSummary.content.questions.length ? (
+                    <span className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">
+                      {latestSummary.content.questions.length} {t("vragen")}
+                    </span>
+                  ) : null}
+                  {latestSummary.content.decisions.length ? (
+                    <span className="rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
+                      {latestSummary.content.decisions.length} {t("besluiten")}
+                    </span>
+                  ) : null}
+                  {latestSummary.content.blocked.length ? (
+                    <span className="rounded-full bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700">
+                      {latestSummary.content.blocked.length} {t("blokkades")}
+                    </span>
+                  ) : null}
                 </div>
+                {(latestSummary.content.mood !== "neutraal" || latestSummary.content.priority !== "middel" || latestSummary.content.tags.length > 0) ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {latestSummary.content.mood === "positief" && <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">😊 {t("Positief")}</span>}
+                    {latestSummary.content.mood === "gestrest" && <span className="rounded-full bg-yellow-100 px-2 py-1 text-xs font-medium text-yellow-700">😰 {t("Gestrest")}</span>}
+                    {latestSummary.content.mood === "negatief" && <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-700">😞 {t("Negatief")}</span>}
+                    {latestSummary.content.priority === "hoog" && <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700">⬆ {t("Hoge prioriteit")}</span>}
+                    {latestSummary.content.priority === "laag" && <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">⬇ {t("Lage prioriteit")}</span>}
+                    {latestSummary.content.tags.map((tag) => (
+                      <span key={tag} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </section>
 
               {/* Actions — each has its own day selector */}
@@ -538,6 +578,34 @@ export function ThoughtInbox({
                 items={latestSummary.content.planningNotes}
                 emptyText={t("Geen planningpunten gevonden.")}
               />
+              {latestSummary.content.concerns.length ? (
+                <SummaryList
+                  title={t("Zorgen")}
+                  items={latestSummary.content.concerns}
+                  emptyText={t("Geen zorgen gevonden.")}
+                />
+              ) : null}
+              {latestSummary.content.questions.length ? (
+                <SummaryList
+                  title={t("Vragen")}
+                  items={latestSummary.content.questions}
+                  emptyText={t("Geen vragen gevonden.")}
+                />
+              ) : null}
+              {latestSummary.content.decisions.length ? (
+                <SummaryList
+                  title={t("Besluiten")}
+                  items={latestSummary.content.decisions}
+                  emptyText={t("Geen besluiten gevonden.")}
+                />
+              ) : null}
+              {latestSummary.content.blocked.length ? (
+                <SummaryList
+                  title={t("Blokkades")}
+                  items={latestSummary.content.blocked}
+                  emptyText={t("Geen blokkades gevonden.")}
+                />
+              ) : null}
             </div>
           ) : (
             <div className="mt-4 space-y-3">
@@ -553,6 +621,8 @@ export function ThoughtInbox({
                   <li className="rounded-xl bg-slate-50 p-2">{t("Kern — waar gaan je notities over?")}</li>
                   <li className="rounded-xl bg-slate-50 p-2">{t("Acties — wat kan direct naar de planner?")}</li>
                   <li className="rounded-xl bg-slate-50 p-2">{t("Ideeën — wat wil je bewaren zonder planningdruk?")}</li>
+                  <li className="rounded-xl bg-slate-50 p-2">{t("Planningpunten — tijdgebonden afspraken en deadlines")}</li>
+                  <li className="rounded-xl bg-slate-50 p-2">{t("Zorgen, vragen, besluiten en blokkades")}</li>
                 </ul>
               </div>
             </div>

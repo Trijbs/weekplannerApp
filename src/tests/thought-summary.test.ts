@@ -8,11 +8,33 @@ import {
   rewriteTask,
   rewriteIdea,
   rewritePlanningNote,
+  rewriteConcern,
+  rewriteQuestion,
+  rewriteDecision,
+  rewriteBlocked,
+  detectMood,
+  detectPriority,
+  extractTags,
   ACTION_MAX_LENGTH,
   IDEA_MAX_LENGTH,
   PLANNING_MAX_LENGTH,
+  CONCERN_MAX_LENGTH,
+  QUESTION_MAX_LENGTH,
+  DECISION_MAX_LENGTH,
+  BLOCKED_MAX_LENGTH,
   CORE_MAX_LENGTH,
   CORE_MIN_LENGTH,
+  MAX_ITEMS_PER_CATEGORY,
+  CONCERN_HINT,
+  QUESTION_HINT,
+  DECISION_HINT,
+  BLOCKED_HINT,
+  MOOD_POSITIVE,
+  MOOD_STRESSED,
+  MOOD_NEGATIVE,
+  PRIORITY_HIGH,
+  PRIORITY_LOW,
+  TAG_PATTERNS,
 } from "@/lib/thoughts/summary";
 import type { ThoughtMessage } from "@/lib/db/types";
 
@@ -313,26 +335,26 @@ describe("rewritePlanningNote", () => {
 
 describe("generateCore", () => {
   it("returns fallback message for zero keywords", () => {
-    const result = generateCore([], 0, 0, 0);
+    const result = generateCore([], 0, 0, 0, 0, 0, 0, 0);
     expect(result).toBe("Nog te weinig tekst voor een duidelijke samenvatting.");
   });
 
   it("generates overview for single keyword", () => {
-    const result = generateCore(["export"], 1, 0, 0);
+    const result = generateCore(["export"], 1, 0, 0, 0, 0, 0, 0);
     expect(result).toContain("export");
     expect(result).toContain("Gaat over");
     expect(result).toContain("1 actie");
   });
 
   it("generates overview for two keywords", () => {
-    const result = generateCore(["export", "datumfilter"], 0, 1, 0);
+    const result = generateCore(["export", "datumfilter"], 0, 1, 0, 0, 0, 0, 0);
     expect(result).toContain("export");
     expect(result).toContain("datumfilter");
     expect(result).toContain("1 idee");
   });
 
   it("generates overview for three or more keywords", () => {
-    const result = generateCore(["export", "datumfilter", "pdf"], 2, 1, 1);
+    const result = generateCore(["export", "datumfilter", "pdf"], 2, 1, 1, 0, 0, 0, 0);
     expect(result).toContain("export");
     expect(result).toContain("pdf");
     expect(result).toContain("2 acties");
@@ -341,39 +363,47 @@ describe("generateCore", () => {
   });
 
   it("uses singular for count of 1", () => {
-    const result = generateCore(["test"], 1, 1, 1);
+    const result = generateCore(["test"], 1, 1, 1, 0, 0, 0, 0);
     expect(result).toContain("1 actie");
     expect(result).toContain("1 idee");
     expect(result).toContain("1 planningpunt");
   });
 
   it("uses plural for count > 1", () => {
-    const result = generateCore(["test"], 2, 3, 2);
+    const result = generateCore(["test"], 2, 3, 2, 0, 0, 0, 0);
     expect(result).toContain("2 acties");
-    expect(result).toContain("3 ideeen");
+    expect(result).toContain("3 idee");
     expect(result).toContain("2 planningpunten");
   });
 
   it("omits zero counts from overview", () => {
-    const result = generateCore(["test"], 0, 2, 0);
+    const result = generateCore(["test"], 0, 2, 0, 0, 0, 0, 0);
     expect(result).not.toContain("actie");
     expect(result).toContain("2 idee");
   });
 
   it("produces overview within length bounds when possible", () => {
-    const result = generateCore(["export", "datumfilter", "pdf"], 3, 2, 1);
+    const result = generateCore(["export", "datumfilter", "pdf"], 3, 2, 1, 0, 0, 0, 0);
     expect(result.length).toBeGreaterThanOrEqual(1);
   });
 
   it("truncates overview to CORE_MAX_LENGTH if necessary", () => {
     const longKeywords = ["zeerlangwoordvoorkeyword1", "zeerlangwoordvoorkeyword2"];
-    const result = generateCore(longKeywords, 5, 5, 5);
+    const result = generateCore(longKeywords, 5, 5, 5, 0, 0, 0, 0);
     expect(result.length).toBeLessThanOrEqual(CORE_MAX_LENGTH);
   });
 
   it("capitalizes first letter of overview", () => {
-    const result = generateCore(["export"], 1, 0, 0);
+    const result = generateCore(["export"], 1, 0, 0, 0, 0, 0, 0);
     expect(result.charAt(0)).toBe(result.charAt(0).toUpperCase());
+  });
+
+  it("includes new category counts in overview", () => {
+    const result = generateCore(["test"], 0, 0, 0, 2, 1, 1, 1);
+    expect(result).toContain("2 zorgen");
+    expect(result).toContain("1 vraag");
+    expect(result).toContain("1 besluit");
+    expect(result).toContain("1 blokkade");
   });
 });
 
@@ -405,6 +435,13 @@ describe("summarizeThoughtMessages", () => {
     expect(summary.tasks).toEqual([]);
     expect(summary.ideas).toEqual([]);
     expect(summary.planningNotes).toEqual([]);
+    expect(summary.concerns).toEqual([]);
+    expect(summary.questions).toEqual([]);
+    expect(summary.decisions).toEqual([]);
+    expect(summary.blocked).toEqual([]);
+    expect(summary.mood).toBe("neutraal");
+    expect(summary.priority).toBe("middel");
+    expect(summary.tags).toEqual([]);
   });
 
   it("returns fallback overview for empty input", () => {
@@ -581,5 +618,258 @@ describe("summarizeThoughtMessages", () => {
 
     const summary = summarizeThoughtMessages(messages);
     expect(summary.tasks.length).toBeLessThanOrEqual(8);
+  });
+});
+
+describe("concern detection", () => {
+  it("classifies concern-hinted sentences as concerns", () => {
+    const summary = summarizeThoughtMessages([
+      message("Ik maak me zorgen om de deadline van het project."),
+    ]);
+    expect(summary.concerns.length).toBeGreaterThanOrEqual(1);
+    expect(summary.concerns[0].toLowerCase()).toContain("deadline");
+  });
+
+  it("detects risks as concerns", () => {
+    const summary = summarizeThoughtMessages([
+      message("Risico dat de migratie faalt en we data verliezen."),
+    ]);
+    expect(summary.concerns.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("strips Zorg: prefix from concerns", () => {
+    const summary = summarizeThoughtMessages([
+      message("Zorg: ik ben bezorgd over de kwaliteit."),
+    ]);
+    for (const concern of summary.concerns) {
+      expect(concern).not.toMatch(/^Zorg:\s/i);
+    }
+  });
+
+  it("respects CONCERN_MAX_LENGTH", () => {
+    const summary = summarizeThoughtMessages([
+      message("Ik maak me zorgen om de hele export pipeline die misschien niet goed werkt als we de nieuwe database migratie doen en de API veranderingen doorvoeren."),
+    ]);
+    for (const concern of summary.concerns) {
+      expect(concern.length).toBeLessThanOrEqual(CONCERN_MAX_LENGTH);
+    }
+  });
+});
+
+describe("question detection", () => {
+  it("classifies questions ending with ? as questions", () => {
+    const summary = summarizeThoughtMessages([
+      message("Wie doet de code review?"),
+    ]);
+    expect(summary.questions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("detects 'onbekend' as question", () => {
+    const summary = summarizeThoughtMessages([
+      message("Het is onbekend of de klant akkoord gaat."),
+    ]);
+    expect(summary.questions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("preserves question marks in questions", () => {
+    const summary = summarizeThoughtMessages([
+      message("Wie doet de code review voor de migratie?"),
+    ]);
+    expect(summary.questions.length).toBeGreaterThanOrEqual(1);
+    expect(summary.questions[0]).toContain("?");
+  });
+
+  it("respects QUESTION_MAX_LENGTH", () => {
+    const summary = summarizeThoughtMessages([
+      message("Hoe moeten we de volledige export pipeline van notities verbeteren inclusief alle datumfilters en PDF ondersteuning?"),
+    ]);
+    for (const q of summary.questions) {
+      expect(q.length).toBeLessThanOrEqual(QUESTION_MAX_LENGTH);
+    }
+  });
+});
+
+describe("decision detection", () => {
+  it("classifies decision-hinted sentences as decisions", () => {
+    const summary = summarizeThoughtMessages([
+      message("Besloten om te migreren naar Neon database."),
+    ]);
+    expect(summary.decisions.length).toBeGreaterThanOrEqual(1);
+    expect(summary.decisions[0].toLowerCase()).toContain("migreren");
+  });
+
+  it("detects 'akkoord' as decision", () => {
+    const summary = summarizeThoughtMessages([
+      message("Akkoord met het nieuwe ontwerp voor de interface."),
+    ]);
+    expect(summary.decisions.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("strips Besluit: prefix from decisions", () => {
+    const summary = summarizeThoughtMessages([
+      message("Besluit: we kiezen voor Cloudflare Workers."),
+    ]);
+    for (const decision of summary.decisions) {
+      expect(decision).not.toMatch(/^Besluit:\s/i);
+    }
+  });
+
+  it("respects DECISION_MAX_LENGTH", () => {
+    const summary = summarizeThoughtMessages([
+      message("Besloten om de volledige architectuur van de applicatie te veranderen naar een microservices model met Cloudflare Workers en Neon database."),
+    ]);
+    for (const decision of summary.decisions) {
+      expect(decision.length).toBeLessThanOrEqual(DECISION_MAX_LENGTH);
+    }
+  });
+});
+
+describe("blocked detection", () => {
+  it("classifies blocked-hinted sentences as blocked items", () => {
+    const summary = summarizeThoughtMessages([
+      message("Wacht op de API-key van ICT voordat we verder kunnen."),
+    ]);
+    expect(summary.blocked.length).toBeGreaterThanOrEqual(1);
+    expect(summary.blocked[0].toLowerCase()).toContain("api-key");
+  });
+
+  it("detects 'kan niet' as blocked", () => {
+    const summary = summarizeThoughtMessages([
+      message("Kan niet deployen zonder de configuratie."),
+    ]);
+    expect(summary.blocked.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("strips Blokkade: prefix from blocked items", () => {
+    const summary = summarizeThoughtMessages([
+      message("Blokkade: wacht op goedkeuring van de manager."),
+    ]);
+    for (const item of summary.blocked) {
+      expect(item).not.toMatch(/^Blokkade:\s/i);
+    }
+  });
+
+  it("respects BLOCKED_MAX_LENGTH", () => {
+    const summary = summarizeThoughtMessages([
+      message("Wacht op de API-key van ICT voordat we de volledige migratie naar de nieuwe server kunnen uitvoeren en alles in productie kunnen nemen."),
+    ]);
+    for (const item of summary.blocked) {
+      expect(item.length).toBeLessThanOrEqual(BLOCKED_MAX_LENGTH);
+    }
+  });
+});
+
+describe("mood detection", () => {
+  it("detects positive mood", () => {
+    expect(detectMood("Ik ben blij dat de export gelukt is en alles werkt perfect.")).toBe("positief");
+  });
+
+  it("detects stressed mood", () => {
+    expect(detectMood("Er is zoveel stress door de deadline en alles moet nu urgent af.")).toBe("gestrest");
+  });
+
+  it("detects negative mood", () => {
+    expect(detectMood("De migratie faalt en alles is mislukt en verkeerd.")).toBe("negatief");
+  });
+
+  it("defaults to neutral mood", () => {
+    expect(detectMood("Ik moet de export verbeteren.")).toBe("neutraal");
+  });
+
+  it("negative takes priority over positive", () => {
+    expect(detectMood("Gelukt maar de test faalt en het is een ramp.")).toBe("negatief");
+  });
+
+  it("stressed takes priority over positive", () => {
+    expect(detectMood("Ik ben blij maar ik heb zoveel stress van de deadline.")).toBe("gestrest");
+  });
+});
+
+describe("priority detection", () => {
+  it("detects high priority", () => {
+    expect(detectPriority("Dit moet NU af, het is urgent en kritiek.")).toBe("hoog");
+  });
+
+  it("detects high priority for ASAP", () => {
+    expect(detectPriority("We moeten dit ASAP afmaken.")).toBe("hoog");
+  });
+
+  it("detects low priority", () => {
+    expect(detectPriority("Dit kan later, geen haast en niet urgent.")).toBe("laag");
+  });
+
+  it("defaults to middel priority", () => {
+    expect(detectPriority("Ik moet de export verbeteren.")).toBe("middel");
+  });
+});
+
+describe("tag extraction", () => {
+  it("detects finance tag", () => {
+    const tags = extractTags("We moeten het budget bekijken en de kosten verlagen.");
+    expect(tags).toContain("finance");
+  });
+
+  it("detects tech tag", () => {
+    const tags = extractTags("De database server en API migration moeten fixen.");
+    expect(tags).toContain("tech");
+  });
+
+  it("detects team tag", () => {
+    const tags = extractTags("We hebben overleg met het team en een standup gepland.");
+    expect(tags).toContain("team");
+  });
+
+  it("detects klant tag", () => {
+    const tags = extractTags("De klant wil feedback geven op de levering.");
+    expect(tags).toContain("klant");
+  });
+
+  it("detects planning tag", () => {
+    const tags = extractTags("We need to plan de sprint en agenda voor de deadline.");
+    expect(tags).toContain("planning");
+  });
+
+  it("detects multiple tags", () => {
+    const tags = extractTags("Het team moet de database migratie plannen binnen het budget.");
+    expect(tags.length).toBeGreaterThanOrEqual(2);
+    expect(tags).toContain("team");
+    expect(tags).toContain("tech");
+  });
+
+  it("returns empty array for no tags", () => {
+    const tags = extractTags("Ik moet even iets doen.");
+    expect(tags).toEqual([]);
+  });
+});
+
+describe("full summary integration with new fields", () => {
+  it("populates all new fields in summary output", () => {
+    const summary = summarizeThoughtMessages([
+      message("Ik maak me zorgen om de deadline. Wie doet de review? Besloten om te migreren. Wacht op de API-key."),
+    ]);
+    expect(summary.concerns).toBeDefined();
+    expect(summary.questions).toBeDefined();
+    expect(summary.decisions).toBeDefined();
+    expect(summary.blocked).toBeDefined();
+    expect(summary.mood).toBeDefined();
+    expect(summary.priority).toBeDefined();
+    expect(summary.tags).toBeDefined();
+  });
+
+  it("classifies a mixed message across multiple categories", () => {
+    const summary = summarizeThoughtMessages([
+      message("Ik moet de export verbeteren. Ik maak me zorgen om de deadline. Wie doet de review? Besloten om Neon te gebruiken. Wacht op de API-key van ICT."),
+    ]);
+    expect(summary.tasks.length).toBeGreaterThanOrEqual(1);
+    expect(summary.concerns.length).toBeGreaterThanOrEqual(1);
+    expect(summary.questions.length).toBeGreaterThanOrEqual(1);
+    expect(summary.decisions.length).toBeGreaterThanOrEqual(1);
+    expect(summary.blocked.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("always returns valid mood and priority", () => {
+    const summary = summarizeThoughtMessages([]);
+    expect(["positief", "neutraal", "gestrest", "negatief"]).toContain(summary.mood);
+    expect(["hoog", "middel", "laag"]).toContain(summary.priority);
   });
 });

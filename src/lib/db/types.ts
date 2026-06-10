@@ -154,11 +154,21 @@ export interface ThoughtMessage {
   createdAt: string;
 }
 
+export type ThoughtMood = "positief" | "neutraal" | "gestrest" | "negatief";
+export type ThoughtPriority = "hoog" | "middel" | "laag";
+
 export interface ThoughtSummaryContent {
   overview: string;
-  ideas: string[];
   tasks: string[];
+  ideas: string[];
   planningNotes: string[];
+  concerns: string[];
+  questions: string[];
+  decisions: string[];
+  blocked: string[];
+  mood: ThoughtMood;
+  priority: ThoughtPriority;
+  tags: string[];
 }
 
 export interface ThoughtSummary {
