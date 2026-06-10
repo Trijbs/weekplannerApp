@@ -41,6 +41,38 @@ import type {
   Weekday,
 } from "@/lib/db/types";
 
+const DEFAULT_SUMMARY_CONTENT: ThoughtSummaryContent = {
+  overview: "",
+  ideas: [],
+  tasks: [],
+  planningNotes: [],
+  concerns: [],
+  questions: [],
+  decisions: [],
+  blocked: [],
+  mood: "neutraal",
+  priority: "middel",
+  tags: [],
+};
+
+function normalizeSummaryContent(content: Partial<ThoughtSummaryContent> & Record<string, unknown>): ThoughtSummaryContent {
+  const validMoods: ThoughtSummaryContent["mood"][] = ["positief", "neutraal", "gestrest", "negatief"];
+  const validPriorities: ThoughtSummaryContent["priority"][] = ["hoog", "middel", "laag"];
+  return {
+    overview: typeof content.overview === "string" ? content.overview : DEFAULT_SUMMARY_CONTENT.overview,
+    ideas: Array.isArray(content.ideas) ? content.ideas.map(String) : DEFAULT_SUMMARY_CONTENT.ideas,
+    tasks: Array.isArray(content.tasks) ? content.tasks.map(String) : DEFAULT_SUMMARY_CONTENT.tasks,
+    planningNotes: Array.isArray(content.planningNotes) ? content.planningNotes.map(String) : DEFAULT_SUMMARY_CONTENT.planningNotes,
+    concerns: Array.isArray(content.concerns) ? content.concerns.map(String) : DEFAULT_SUMMARY_CONTENT.concerns,
+    questions: Array.isArray(content.questions) ? content.questions.map(String) : DEFAULT_SUMMARY_CONTENT.questions,
+    decisions: Array.isArray(content.decisions) ? content.decisions.map(String) : DEFAULT_SUMMARY_CONTENT.decisions,
+    blocked: Array.isArray(content.blocked) ? content.blocked.map(String) : DEFAULT_SUMMARY_CONTENT.blocked,
+    mood: validMoods.includes(content.mood as ThoughtSummaryContent["mood"]) ? content.mood as ThoughtSummaryContent["mood"] : DEFAULT_SUMMARY_CONTENT.mood,
+    priority: validPriorities.includes(content.priority as ThoughtSummaryContent["priority"]) ? content.priority as ThoughtSummaryContent["priority"] : DEFAULT_SUMMARY_CONTENT.priority,
+    tags: Array.isArray(content.tags) ? content.tags.map(String) : DEFAULT_SUMMARY_CONTENT.tags,
+  };
+}
+
 const DB_FILE = process.env.LOCAL_DB_PATH ?? path.join(process.cwd(), "data", "local-db.json");
 
 const EMPTY_STATE: LocalDatabaseState = {
@@ -91,7 +123,7 @@ async function readState(): Promise<LocalDatabaseState> {
     const raw = await readFile(DB_FILE, "utf-8");
     const parsed = JSON.parse(raw) as LocalDatabaseState;
 
-    return {
+return {
       ...cloneEmptyState(),
       ...parsed,
       sessions: parsed.sessions ?? [],
@@ -103,7 +135,12 @@ async function readState(): Promise<LocalDatabaseState> {
       importJobs: parsed.importJobs ?? [],
       thoughtThreads: parsed.thoughtThreads ?? [],
       thoughtMessages: parsed.thoughtMessages ?? [],
-      thoughtSummaries: parsed.thoughtSummaries ?? [],
+      thoughtSummaries: (parsed.thoughtSummaries ?? []).map(
+        (summary: ThoughtSummary) => ({
+          ...summary,
+          content: normalizeSummaryContent(summary.content as Record<string, unknown> & Partial<ThoughtSummaryContent>),
+        }),
+      ),
     };
   } catch {
     return cloneEmptyState();
