@@ -2504,13 +2504,17 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   );
 
   const createTaskFromThought = useCallback(
-    async (title: string, weekday: Weekday, threadId?: string): Promise<boolean> => {
+    async (title: string, weekday: Weekday, threadId?: string, deadlineAtLocal?: string): Promise<boolean> => {
       if (!payload?.week.id) {
         setError(language === "en" ? "Week data is not loaded yet." : "Weekgegevens zijn nog niet geladen.");
         return false;
       }
 
-      const outcome = await sendMutation(
+      const deadlineAt = deadlineAtLocal
+        ? localInputToTimezoneIso(deadlineAtLocal, "Europe/Amsterdam")
+        : null;
+
+      const taskOutcome = await sendMutation(
         `/api/weeks/${payload.week.id}/tasks`,
         "POST",
         {
@@ -2520,13 +2524,49 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           priority: "middel",
           status: "open",
           source: "thought",
+          deadlineAt,
           ...(threadId ? { threadId } : {}),
         },
         t("Taak toegevoegd."),
         { localUpdate: true, keepCurrentWeek: false },
       );
 
-      return outcome.ok && !outcome.queued;
+      const taskOk = taskOutcome.ok && !taskOutcome.queued;
+
+      if (taskOk && deadlineAtLocal) {
+        let timeStart = "09:00";
+        let timeEnd = "10:00";
+
+        const timeMatch = deadlineAtLocal.match(/T(\d{2}):(\d{2})$/);
+        if (timeMatch) {
+          const hour = Number(timeMatch[1]);
+          const minute = Number(timeMatch[2]);
+          timeStart = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+          const endHour = minute >= 30 ? hour + 1 : hour;
+          const endMinute = minute >= 30 ? minute - 30 : minute + 30;
+          timeEnd = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+        }
+
+        await sendMutation(
+          `/api/weeks/${payload.week.id}/hour-blocks`,
+          "POST",
+          {
+            weekday,
+            dayDate: deadlineAtLocal.split("T")[0] || null,
+            timeStart,
+            timeEnd,
+            taskText: title,
+            projectText: "",
+            deadlineAt,
+            status: "open",
+            source: "thought",
+          },
+          "",
+          { localUpdate: true, keepCurrentWeek: false, silent: true },
+        );
+      }
+
+      return taskOk;
     },
     [language, payload?.week.id, sendMutation, t],
   );

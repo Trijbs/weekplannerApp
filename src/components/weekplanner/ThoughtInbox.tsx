@@ -21,7 +21,7 @@ type ThoughtInboxProps = {
   currentWeek: WeekRecord | null;
   weekdayLabels: Record<Weekday, string>;
   translate: (text: string) => string;
-  onCreateTask: (title: string, weekday: Weekday, threadId?: string) => Promise<boolean>;
+  onCreateTask: (title: string, weekday: Weekday, threadId?: string, deadlineAt?: string) => Promise<boolean>;
   highlightThreadId?: string | null;
 };
 
@@ -97,6 +97,7 @@ export function ThoughtInbox({
   const [draft, setDraft] = useState("");
   // Per-action day selectors — keyed by action text so each action has its own day
   const [actionDays, setActionDays] = useState<Record<string, Weekday>>({});
+  const [actionDeadlines, setActionDeadlines] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [promotingTask, setPromotingTask] = useState<string | null>(null);
@@ -122,6 +123,10 @@ export function ThoughtInbox({
 
   const setActionDay = useCallback((action: string, day: Weekday) => {
     setActionDays((prev) => ({ ...prev, [action]: day }));
+  }, []);
+
+  const setActionDeadline = useCallback((action: string, deadline: string) => {
+    setActionDeadlines((prev) => ({ ...prev, [action]: deadline }));
   }, []);
 
   const loadThreads = useCallback(async () => {
@@ -526,7 +531,7 @@ export function ThoughtInbox({
                 ) : null}
               </section>
 
-              {/* Actions — each has its own day selector */}
+              {/* Actions — each has its own day selector and deadline */}
               <div className="rounded-2xl border border-slate-200 bg-white p-3">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Acties")}</h4>
                 <div className="mt-2 space-y-2">
@@ -534,7 +539,7 @@ export function ThoughtInbox({
                     latestSummary.content.tasks.map((item) => (
                       <div key={item} className="rounded-xl bg-slate-50 p-2.5">
                         <p className="text-sm leading-5 text-slate-800">{item}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
                           <select
                             className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
                             value={getActionDay(item)}
@@ -546,13 +551,21 @@ export function ThoughtInbox({
                               </option>
                             ))}
                           </select>
+                          <input
+                            type="datetime-local"
+                            className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+                            value={actionDeadlines[item] ?? ""}
+                            onChange={(event) => setActionDeadline(item, event.target.value)}
+                            placeholder={t("Datum/tijd (optioneel)")}
+                          />
                           <button
                             type="button"
                             className="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50"
                             disabled={promotingTask === item}
                             onClick={() => {
                               setPromotingTask(item);
-                              void onCreateTask(item, getActionDay(item), activeThreadId ?? undefined).finally(() =>
+                              const deadline = actionDeadlines[item] || undefined;
+                              void onCreateTask(item, getActionDay(item), activeThreadId ?? undefined, deadline).finally(() =>
                                 setPromotingTask(null),
                               );
                             }}
