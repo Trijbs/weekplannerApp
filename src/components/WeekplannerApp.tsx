@@ -20,6 +20,7 @@ import { WeekScrollStrip } from "@/components/weekplanner/WeekScrollStrip";
 import { ProjectCombobox } from "@/components/weekplanner/ProjectCombobox";
 import { AssigneeTagInput } from "@/components/weekplanner/AssigneeTagInput";
 import { ThoughtInbox } from "@/components/weekplanner/ThoughtInbox";
+import { AnimatedDeleteButton } from "@/components/weekplanner/AnimatedDeleteButton";
 import { MultiWeekPlanModal } from "@/components/weekplanner/MultiWeekPlanModal";
 import { NotesExportModal } from "@/components/weekplanner/NotesExportModal";
 import {
@@ -3834,13 +3835,13 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                   )
                                 }
                               />
-                              <button
-                                type="button"
-                                className="rounded-lg border border-red-200 px-2 py-1 text-red-600 hover:bg-red-50 lg:col-span-1"
-                                onClick={() => void sendMutation(`/api/hours/${entry.id}`, "DELETE", {}, t("Urenregel verwijderd."))}
-                              >
-                                {t("Verwijder")}
-                              </button>
+                              <AnimatedDeleteButton
+                                onConfirm={() => void sendMutation(`/api/hours/${entry.id}`, "DELETE", {}, t("Urenregel verwijderd."))}
+                                label={t("Verwijder")}
+                                confirmLabel={t("Zeker?")}
+                                size="sm"
+                                className="lg:col-span-1"
+                              />
                               </div>
                               <p className="mt-2 text-xs text-slate-500">{weekdayLabels[entry.weekday]}</p>
                             </div>
@@ -3995,13 +3996,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                           >
                             {t("Open dag")}
                           </button>
-                          <button
-                            type="button"
-                            className="rounded-lg border border-red-200 px-2 py-1 text-xs text-red-700 hover:bg-red-50"
-                            onClick={() => hideCompletedLogItem(item.taskId)}
-                          >
-                            {t("Verwijder uit log")}
-                          </button>
+                          <AnimatedDeleteButton
+                            onConfirm={() => hideCompletedLogItem(item.taskId)}
+                            label={t("Verwijder uit log")}
+                            confirmLabel={t("Zeker?")}
+                            size="sm"
+                          />
                         </div>
                       </div>
 
@@ -4374,15 +4374,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                                   <option value="bezig">{translateStatus(language, "bezig")}</option>
                                   <option value="klaar">{translateStatus(language, "klaar")}</option>
                                 </select>
-                                <button
-                                  type="button"
-                                  className="text-sm text-red-600"
-                                  onClick={() =>
-                                    void sendMutation(`/api/hour-blocks/${block.id}`, "DELETE", {}, t("Uurblok verwijderd."))
-                                  }
-                                >
-                                  {t("Verwijder")}
-                                </button>
+                                <AnimatedDeleteButton
+                                  onConfirm={() => void sendMutation(`/api/hour-blocks/${block.id}`, "DELETE", {}, t("Uurblok verwijderd."))}
+                                  label={t("Verwijder")}
+                                  confirmLabel={t("Zeker?")}
+                                  size="sm"
+                                />
                               </div>
                             </div>
 

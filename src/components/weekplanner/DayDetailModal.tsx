@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
 import { formatIsoToLocalInput } from "@/lib/db/helpers";
 import type { DayTask, HourEntry, Weekday } from "@/lib/db/types";
 import type { DetailTaskFormState, HourBlockDisplayGroup } from "@/components/weekplanner/types";
 import type { AppLanguage } from "@/lib/i18n";
 import { translateStatic } from "@/lib/i18n";
+import { AnimatedDeleteButton } from "@/components/weekplanner/AnimatedDeleteButton";
 
 const ASSIGNEE_COLORS = [
   { bg: "#dbeafe", border: "#bfdbfe", text: "#1d4ed8", avatar: "#2563eb" },
@@ -113,26 +113,6 @@ export function DayDetailModal({
   onNavigateToThought,
 }: DayDetailModalProps) {
   const t = (text: string) => translateStatic(language, text);
-
-  // Two-step delete confirmation
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleDeleteClick = (taskId: string) => {
-    if (pendingDeleteId === taskId) {
-      // Second click — confirm
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-      setPendingDeleteId(null);
-      void onTaskDelete(taskId);
-    } else {
-      // First click — arm
-      if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current);
-      setPendingDeleteId(taskId);
-      deleteTimerRef.current = setTimeout(() => setPendingDeleteId(null), 2000);
-    }
-  };
-
-  useEffect(() => () => { if (deleteTimerRef.current) clearTimeout(deleteTimerRef.current); }, []);
 
   const summary =
     language === "en"
@@ -290,18 +270,12 @@ export function DayDetailModal({
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadgeClass(task.status)}`}>
                           {task.status === "klaar" ? t("Klaar") : task.status === "bezig" ? t("Bezig") : t("Open")}
                         </span>
-                        <button
-                          type="button"
-                          className={`rounded px-2 py-0.5 text-xs transition-colors ${
-                            pendingDeleteId === task.id
-                              ? "animate-pulse bg-red-100 font-semibold text-red-600"
-                              : "text-slate-400 hover:text-red-500"
-                          }`}
-                          onClick={() => handleDeleteClick(task.id)}
-                          title={pendingDeleteId === task.id ? (language === "en" ? "Click again to confirm" : "Nogmaals klikken om te bevestigen") : undefined}
-                        >
-                          {pendingDeleteId === task.id ? (language === "en" ? "Confirm?" : "Zeker?") : t("Verwijder")}
-                        </button>
+                        <AnimatedDeleteButton
+                          onConfirm={() => void onTaskDelete(task.id)}
+                          label={t("Verwijder")}
+                          confirmLabel={t("Zeker?")}
+                          size="sm"
+                        />
                       </div>
                     </div>
                     <div className="mt-2 space-y-2">
