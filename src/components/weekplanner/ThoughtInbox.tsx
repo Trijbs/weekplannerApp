@@ -9,7 +9,7 @@ import type {
   WeekRecord,
 } from "@/lib/db/types";
 import { WEEKDAYS } from "@/lib/db/types";
-import { AnimatedDeleteButton } from "@/components/weekplanner/AnimatedDeleteButton";
+import { AnimatedDeleteButton, ArchiveButton } from "@/components/weekplanner/AnimatedDeleteButton";
 
 type ThoughtThreadDetail = {
   thread: ThoughtThread;
@@ -290,6 +290,13 @@ export function ThoughtInbox({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      {/* Error banner — always visible at top */}
+      {error ? (
+        <div className="border-b border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
+
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-4">
         <div>
@@ -312,7 +319,7 @@ export function ThoughtInbox({
       <div className="grid lg:grid-cols-[230px_minmax(0,1fr)_360px]">
 
         {/* Sidebar — thread list grouped by date */}
-        <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:border-b-0 lg:border-r">
+        <aside className="max-h-[calc(100vh-12rem)] overflow-y-auto border-b border-slate-200 bg-slate-50 p-3 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Gesprekken")}</h3>
             <span className="rounded-full bg-white px-2 py-1 text-xs text-slate-500">{threads.length}</span>
@@ -327,33 +334,24 @@ export function ThoughtInbox({
                   </p>
                   <div className="space-y-1.5">
                     {group.threads.map((thread) => (
-                      <div key={thread.id} className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm transition ${
-                            highlightedId === thread.id ? "animate-pulse bg-yellow-50 border-yellow-400"
-                            : thread.id === activeThreadId
-                              ? "border-blue-300 bg-blue-50 text-slate-950"
-                              : "border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-100"
-                          }`}
-                          onClick={() => setActiveThreadId(thread.id)}
-                        >
-                          <span className="block truncate font-semibold leading-5">
-                            {thread.title === "Nieuwe gedachten" ? t("Nieuwe gedachten") : thread.title || t("Zonder titel")}
-                          </span>
-                          <span className="mt-1 block text-xs text-slate-400">
-                            {formatShortDate(thread.updatedAt)}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className="shrink-0 rounded px-1.5 py-1 text-[10px] text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50"
-                          disabled={archivingThreadId === thread.id}
-                          onClick={(event) => { event.stopPropagation(); void archiveThread(thread.id); }}
-                        >
-                          {archivingThreadId === thread.id ? "…" : t("Archiveer")}
-                        </button>
-                      </div>
+                      <button
+                        key={thread.id}
+                        type="button"
+                        className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition ${
+                          highlightedId === thread.id ? "animate-pulse bg-yellow-50 border-yellow-400"
+                          : thread.id === activeThreadId
+                            ? "border-blue-300 bg-blue-50 text-slate-950"
+                            : "border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-100"
+                        }`}
+                        onClick={() => setActiveThreadId(thread.id)}
+                      >
+                        <span className="block truncate font-semibold leading-5">
+                          {thread.title === "Nieuwe gedachten" ? t("Nieuwe gedachten") : thread.title || t("Zonder titel")}
+                        </span>
+                        <span className="mt-1 block text-xs text-slate-400">
+                          {formatShortDate(thread.updatedAt)}
+                        </span>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -367,8 +365,8 @@ export function ThoughtInbox({
         </aside>
 
         {/* Main — message thread + input */}
-        <section className="min-w-0 border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <section className="max-h-[calc(100vh-12rem)] overflow-y-auto border-b border-slate-200 p-4 lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h3 className="truncate text-base font-semibold text-slate-950">
                 {detail?.thread.title === "Nieuwe gedachten"
@@ -377,22 +375,32 @@ export function ThoughtInbox({
               </h3>
               <p className="mt-1 text-xs text-slate-500">{messageCountLabel}</p>
             </div>
-            <button
-              type="button"
-              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!detail?.messages.length || summarizing}
-              onClick={() => void summarize()}
-            >
-              {summarizing ? t("Samenvatten...") : t("Samenvatten")}
-            </button>
-            {activeThreadId ? (
-              <AnimatedDeleteButton
-                onConfirm={() => void deleteThread(activeThreadId)}
-                label={t("Verwijderen")}
-                confirmLabel={t("Zeker?")}
-                size="sm"
-              />
-            ) : null}
+            <div className="flex shrink-0 items-center gap-2">
+              {activeThreadId ? (
+                <ArchiveButton
+                  onConfirm={() => void archiveThread(activeThreadId)}
+                  label={archivingThreadId === activeThreadId ? `${t("Archiveer")}…` : t("Archiveer")}
+                  size="sm"
+                  disabled={!!archivingThreadId}
+                />
+              ) : null}
+              {activeThreadId ? (
+                <AnimatedDeleteButton
+                  onConfirm={() => void deleteThread(activeThreadId)}
+                  label={t("Verwijderen")}
+                  confirmLabel={t("Zeker?")}
+                  size="sm"
+                />
+              ) : null}
+              <button
+                type="button"
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!detail?.messages.length || summarizing}
+                onClick={() => void summarize()}
+              >
+                {summarizing ? t("Samenvatten...") : t("Samenvatten")}
+              </button>
+            </div>
           </div>
 
           {/* Input area */}
@@ -444,7 +452,7 @@ export function ThoughtInbox({
         </section>
 
         {/* Summary panel */}
-        <aside className="bg-blue-50/30 p-4">
+        <aside className="max-h-[calc(100vh-12rem)] overflow-y-auto bg-blue-50/30 p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <h3 className="text-base font-semibold text-slate-950">{t("Samenvatting")}</h3>
@@ -549,12 +557,6 @@ export function ThoughtInbox({
               </div>
             </div>
           )}
-
-          {error ? (
-            <div className="mt-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          ) : null}
         </aside>
       </div>
     </div>
