@@ -21,7 +21,7 @@ type ThoughtInboxProps = {
   currentWeek: WeekRecord | null;
   weekdayLabels: Record<Weekday, string>;
   translate: (text: string) => string;
-  onCreateTask: (title: string, weekday: Weekday, threadId?: string, scheduleAt?: string) => Promise<boolean>;
+  onCreateTask: (title: string, weekday: Weekday, threadId?: string, scheduleTime?: string) => Promise<boolean>;
   highlightThreadId?: string | null;
 };
 
@@ -531,7 +531,7 @@ export function ThoughtInbox({
                 ) : null}
               </section>
 
-              {/* Actions — each has its own day selector and deadline */}
+              {/* Actions — each has its own day selector and start time */}
               <div className="rounded-2xl border border-slate-200 bg-white p-3">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Acties")}</h4>
                 <div className="mt-2 space-y-2">
@@ -552,7 +552,7 @@ export function ThoughtInbox({
                             ))}
                           </select>
                           <input
-                            type="datetime-local"
+                            type="time"
                             className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
                             value={actionScheduleAt[item] ?? ""}
                             onChange={(event) => setActionScheduleAt(item, event.target.value)}
