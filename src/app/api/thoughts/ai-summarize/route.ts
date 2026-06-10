@@ -1,6 +1,7 @@
 import { ensureAuth } from "@/lib/api/guards";
 import { ok, fail, parseError } from "@/lib/api/http";
 import { db } from "@/lib/db/repository";
+import { aiSummarizeThoughts } from "@/lib/thoughts/ai-summarize";
 import { summarizeThoughtMessages } from "@/lib/thoughts/summary";
 
 export async function POST(request: Request) {
@@ -26,16 +27,12 @@ export async function POST(request: Request) {
       return fail("Schrijf eerst een gedachte op.", 400);
     }
 
-    const hasAiBinding = typeof (globalThis as Record<string, unknown>).AI !== "undefined";
-    const hasAiApiKey = !!process.env.CLOUDFLARE_AI_API_KEY;
+    const hasAiCredentials = !!process.env.CLOUDFLARE_ACCOUNT_ID && !!process.env.CLOUDFLARE_AI_API_TOKEN;
 
-    if (hasAiBinding || hasAiApiKey) {
-      console.info("[ai-summarize] Workers AI binding detected; AI summarization not yet implemented, falling back to rule-based.");
-    } else {
-      console.info("[ai-summarize] No Workers AI binding or API key found; using rule-based summarization.");
-    }
+    const content = hasAiCredentials
+      ? await aiSummarizeThoughts(messages)
+      : summarizeThoughtMessages(messages);
 
-    const content = summarizeThoughtMessages(messages);
     const summary = await db.createThoughtSummary(threadId, content, messages.length);
     return ok({ summary }, { status: 201 });
   } catch (error) {
