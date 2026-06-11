@@ -10,6 +10,7 @@ import type {
 } from "@/lib/db/types";
 import { WEEKDAYS } from "@/lib/db/types";
 import { AnimatedDeleteButton, ArchiveButton } from "@/components/weekplanner/AnimatedDeleteButton";
+import { useDraftPersistence } from "./useDraftPersistence";
 
 type ThoughtThreadDetail = {
   thread: ThoughtThread;
@@ -94,7 +95,7 @@ export function ThoughtInbox({
   const [threads, setThreads] = useState<ThoughtThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ThoughtThreadDetail | null>(null);
-  const [draft, setDraft] = useState("");
+  const { draft, setDraft, clearDraft, saved: draftSaved } = useDraftPersistence(activeThreadId);
   // Per-action day selectors — keyed by action text so each action has its own day
   const [actionDays, setActionDays] = useState<Record<string, Weekday>>({});
   const [actionScheduleAt, _setScheduleAt] = useState<Record<string, string>>({});
@@ -246,7 +247,7 @@ export function ThoughtInbox({
         body: JSON.stringify({ bodyText }),
       });
       const data = await readJson<{ message: ThoughtMessage }>(response);
-      setDraft("");
+      clearDraft();
       setDetail((prev) =>
         prev && prev.thread.id === threadId
           ? { ...prev, messages: [...prev.messages, data.message] }
@@ -261,7 +262,7 @@ export function ThoughtInbox({
     } finally {
       setBusy(false);
     }
-  }, [activeThreadId, createThread, draft, loadDetail, loadThreads, t]);
+  }, [activeThreadId, clearDraft, createThread, draft, loadDetail, loadThreads, t]);
 
   const summarize = useCallback(async () => {
     if (!activeThreadId) {
@@ -424,7 +425,11 @@ export function ThoughtInbox({
               }}
             />
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-3 py-3">
-              <span className="text-xs text-slate-500">{t("Wordt automatisch samengevat na het opslaan")}</span>
+              <span className="text-xs text-slate-500">
+                {draftSaved && draft.trim()
+                  ? t("Concept opgeslagen")
+                  : t("Wordt automatisch samengevat na het opslaan")}
+              </span>
               <button
                 type="button"
                 className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"

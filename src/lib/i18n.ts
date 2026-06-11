@@ -96,6 +96,7 @@ const staticTranslations: Record<string, string> = {
   "Gesprek aanmaken mislukt.": "Could not create conversation.",
   "Gesprek ontbreekt.": "Conversation is missing.",
   "Gedachte opslaan mislukt.": "Could not save thought.",
+  "Concept opgeslagen": "Draft saved",
   "Samenvatten mislukt.": "Could not summarize.",
   "Weekgegevens laden...": "Loading week data...",
   Taaktitel: "Task title",
