@@ -65,6 +65,36 @@ export function budgetStatus(usedHours: number, budgetHours: number): BudgetStat
   };
 }
 
+/**
+ * Wandkloktijd van "nu" in de opgegeven tijdzone als pseudo-ISO string
+ * (YYYY-MM-DDTHH:mm:00.000Z), vergelijkbaar met bloktijden die als lokale
+ * wandkloktijd zijn opgeslagen. Zie het contract van deriveTimeReminders.
+ */
+export function wallClockNowPseudoIso(timeZone: string, reference: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(reference);
+
+  const get = (type: string) => parts.find((part) => part.type === type)?.value;
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  const hour = get("hour");
+  const minute = get("minute");
+
+  if (!year || !month || !day || !hour || !minute) {
+    return reference.toISOString();
+  }
+
+  return `${year}-${month}-${day}T${hour}:${minute}:00.000Z`;
+}
+
 export type TimeReminderKind = "task-zonder-uren" | "blok-zonder-uren";
 
 export interface TimeReminder {
