@@ -19,6 +19,7 @@ import type {
   HoursSummary,
   ImportJob,
   ImportUpsertResult,
+  ProjectBudget,
   SessionRecord,
   TaskHistory,
   ThoughtMessage,
@@ -27,10 +28,12 @@ import type {
   ThoughtSummaryContent,
   ThoughtThread,
   ThoughtThreadInput,
+  TimerStartInput,
   WeekAggregate,
   WeekRecord,
   Weekday,
 } from "@/lib/db/types";
+import { computeDurationHours } from "@/lib/time/tracking";
 
 type SqlRow = Record<string, unknown>;
 
@@ -256,6 +259,21 @@ function mapHourEntry(row: SqlRow): HourEntry {
     projectName: String(row.project_name ?? ""),
     noteText: String(row.note_text ?? ""),
     source: String(row.source ?? "manual") as HourEntry["source"],
+    startedAt: row.started_at ? toIsoDateTime(row.started_at) : null,
+    stoppedAt: row.stopped_at ? toIsoDateTime(row.stopped_at) : null,
+    hourBlockId: row.hour_block_id ? String(row.hour_block_id) : null,
+    dayTaskId: row.day_task_id ? String(row.day_task_id) : null,
+    status: row.status === "running" ? "running" : "registered",
+    createdAt: toIsoDateTime(row.created_at),
+    updatedAt: toIsoDateTime(row.updated_at),
+  };
+}
+
+function mapProjectBudget(row: SqlRow): ProjectBudget {
+  return {
+    id: String(row.id),
+    projectName: String(row.project_name),
+    budgetHours: Number(row.budget_hours ?? 0),
     createdAt: toIsoDateTime(row.created_at),
     updatedAt: toIsoDateTime(row.updated_at),
   };
@@ -1216,8 +1234,13 @@ export const neonDb: DatabaseRepository = {
           hours_decimal,
           project_name,
           note_text,
-          source
-        ) values ($1, $2, $3, $4, $5, $6, $7)
+          source,
+          started_at,
+          stopped_at,
+          hour_block_id,
+          day_task_id,
+          status
+        ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         returning *
       `,
       [
@@ -1228,6 +1251,11 @@ export const neonDb: DatabaseRepository = {
         input.projectName?.trim() ?? "",
         input.noteText?.trim() ?? "",
         input.source ?? "manual",
+        input.startedAt ?? null,
+        input.stoppedAt ?? null,
+        input.hourBlockId ?? null,
+        input.dayTaskId ?? null,
+        input.status ?? "registered",
       ],
       "Kan urenregel niet aanmaken",
     );
@@ -1274,6 +1302,11 @@ export const neonDb: DatabaseRepository = {
       projectName: patch.projectName !== undefined ? patch.projectName.trim() : existing.projectName,
       noteText: patch.noteText !== undefined ? patch.noteText.trim() : existing.noteText,
       source: patch.source ?? existing.source,
+      startedAt: patch.startedAt !== undefined ? patch.startedAt : existing.startedAt,
+      stoppedAt: patch.stoppedAt !== undefined ? patch.stoppedAt : existing.stoppedAt,
+      hourBlockId: patch.hourBlockId !== undefined ? patch.hourBlockId : existing.hourBlockId,
+      dayTaskId: patch.dayTaskId !== undefined ? patch.dayTaskId : existing.dayTaskId,
+      status: patch.status ?? existing.status,
     };
 
     const row = await queryOne(
@@ -1286,7 +1319,12 @@ export const neonDb: DatabaseRepository = {
             project_name = $6,
             note_text = $7,
             source = $8,
-            updated_at = $9
+            started_at = $9,
+            stopped_at = $10,
+            hour_block_id = $11,
+            day_task_id = $12,
+            status = $13,
+            updated_at = $14
         where id = $1
         returning *
       `,
@@ -1299,6 +1337,11 @@ export const neonDb: DatabaseRepository = {
         next.projectName,
         next.noteText,
         next.source,
+        next.startedAt,
+        next.stoppedAt,
+        next.hourBlockId,
+        next.dayTaskId,
+        next.status,
         nowIso(),
       ],
       "Kan urenregel niet bijwerken",
@@ -1373,6 +1416,192 @@ export const neonDb: DatabaseRepository = {
   async getHoursSummary(weekId: string): Promise<HoursSummary> {
     const entries = await this.getHoursByWeek(weekId).then((value) => value.entries);
     return buildHoursSummary(entries);
+  },
+
+  async getRunningHourEntry(): Promise<HourEntry | null> {
+    const row = await queryOne(
+      `select * from hour_entries where status = 'running' order by started_at desc limit 1`,
+      [],
+      "Kan lopende timer niet laden",
+    );
+
+    return row ? mapHourEntry(row) : null;
+  },
+
+  async startHourTimer(weekId: string, input: TimerStartInput, actor: HistoryActor): Promise<HourEntry> {
+    // Maximaal één lopende timer: registreer een eventuele lopende eerst.
+    const running = await this.getRunningHourEntry();
+    if (running) {
+      await this.stopHourTimer(running.id, actor);
+    }
+
+    const now = nowIso();
+    const row = await queryOne(
+      `
+        insert into hour_entries (
+          week_id,
+          day_date,
+          weekday,
+          hours_decimal,
+          project_name,
+          note_text,
+          source,
+          started_at,
+          hour_block_id,
+          day_task_id,
+          status
+        ) values ($1, $2, $3, 0, $4, $5, 'manual', $6, $7, $8, 'running')
+        returning *
+      `,
+      [
+        weekId,
+        input.dayDate,
+        input.weekday,
+        input.projectName?.trim() ?? "",
+        input.noteText?.trim() ?? "",
+        now,
+        input.hourBlockId ?? null,
+        input.dayTaskId ?? null,
+      ],
+      "Kan timer niet starten",
+    );
+
+    if (!row) {
+      throw new Error("Kan timer niet starten: geen resultaat");
+    }
+
+    const created = mapHourEntry(row);
+    await insertHistory({
+      weekId,
+      entityType: "hour_entry",
+      entityId: created.id,
+      eventType: "created",
+      actor,
+      noteText: `Timer gestart op ${created.dayDate}`,
+      changedFields: computeDiff({}, created as unknown as Record<string, unknown>),
+    });
+
+    return created;
+  },
+
+  async stopHourTimer(entryId: string, actor: HistoryActor): Promise<HourEntry | null> {
+    const existing = await this.getHourEntryById(entryId);
+    if (!existing || existing.status !== "running") {
+      return null;
+    }
+
+    const now = nowIso();
+    const hoursDecimal = existing.startedAt
+      ? computeDurationHours(existing.startedAt, now)
+      : existing.hoursDecimal;
+
+    const row = await queryOne(
+      `
+        update hour_entries
+        set stopped_at = $2,
+            hours_decimal = $3,
+            status = 'registered',
+            updated_at = $2
+        where id = $1 and status = 'running'
+        returning *
+      `,
+      [entryId, now, hoursDecimal],
+      "Kan timer niet stoppen",
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    const updated = mapHourEntry(row);
+    await insertHistory({
+      weekId: updated.weekId,
+      entityType: "hour_entry",
+      entityId: updated.id,
+      eventType: "updated",
+      actor,
+      noteText: `Timer gestopt: ${updated.hoursDecimal} uur op ${updated.dayDate}`,
+      changedFields: computeDiff(
+        existing as unknown as Record<string, unknown>,
+        updated as unknown as Record<string, unknown>,
+      ),
+    });
+
+    return updated;
+  },
+
+  async listHourEntriesByRange(startDate: string | null, endDate: string | null): Promise<HourEntry[]> {
+    const rows = await queryRows(
+      `
+        select * from hour_entries
+        where ($1::date is null or day_date >= $1::date)
+          and ($2::date is null or day_date <= $2::date)
+        order by day_date asc, created_at asc
+      `,
+      [startDate, endDate],
+      "Kan urenregels niet laden",
+    );
+
+    return rows.map(mapHourEntry);
+  },
+
+  async listProjectBudgets(): Promise<ProjectBudget[]> {
+    const rows = await queryRows(
+      `select * from project_budgets order by project_name asc`,
+      [],
+      "Kan projectbudgetten niet laden",
+    );
+
+    return rows.map(mapProjectBudget);
+  },
+
+  async upsertProjectBudget(projectName: string, budgetHours: number): Promise<ProjectBudget> {
+    const row = await queryOne(
+      `
+        insert into project_budgets (project_name, budget_hours)
+        values ($1, $2)
+        on conflict (project_name)
+        do update set budget_hours = excluded.budget_hours, updated_at = now()
+        returning *
+      `,
+      [projectName.trim(), budgetHours],
+      "Kan projectbudget niet opslaan",
+    );
+
+    if (!row) {
+      throw new Error("Kan projectbudget niet opslaan: geen resultaat");
+    }
+
+    return mapProjectBudget(row);
+  },
+
+  async deleteProjectBudget(id: string): Promise<boolean> {
+    const rows = await queryRows(
+      `delete from project_budgets where id = $1 returning id`,
+      [id],
+      "Kan projectbudget niet verwijderen",
+    );
+
+    return rows.length > 0;
+  },
+
+  async getProjectHourTotals(): Promise<Array<{ projectName: string; totalHours: number }>> {
+    const rows = await queryRows(
+      `
+        select coalesce(nullif(trim(project_name), ''), 'Onbekend') as project_name,
+               sum(hours_decimal) as total_hours
+        from hour_entries
+        group by 1
+        order by total_hours desc, project_name asc
+      `,
+      [],
+      "Kan projecttotalen niet laden",
+    );
+
+    return rows.map((row) => ({
+      projectName: String(row.project_name),
+      totalHours: Number(Number(row.total_hours ?? 0).toFixed(2)),
+    }));
   },
 
   async listHistory(weekId: string, limit = 250): Promise<TaskHistory[]> {

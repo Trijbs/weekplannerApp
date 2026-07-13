@@ -14,6 +14,7 @@ import type {
   HoursSummary,
   ImportJob,
   ImportUpsertResult,
+  ProjectBudget,
   SessionRecord,
   TaskHistory,
   ThoughtMessage,
@@ -22,6 +23,7 @@ import type {
   ThoughtSummaryContent,
   ThoughtThread,
   ThoughtThreadInput,
+  TimerStartInput,
   WeekAggregate,
   WeekRecord,
 } from "@/lib/db/types";
@@ -79,6 +81,14 @@ export interface DatabaseRepository {
   deleteHourEntry(entryId: string, actor: HistoryActor): Promise<boolean>;
   getHoursByWeek(weekId: string): Promise<{ entries: HourEntry[]; summary: HoursSummary }>;
   getHoursSummary(weekId: string): Promise<HoursSummary>;
+  getRunningHourEntry(): Promise<HourEntry | null>;
+  startHourTimer(weekId: string, input: TimerStartInput, actor: HistoryActor): Promise<HourEntry>;
+  stopHourTimer(entryId: string, actor: HistoryActor): Promise<HourEntry | null>;
+  listHourEntriesByRange(startDate: string | null, endDate: string | null): Promise<HourEntry[]>;
+  listProjectBudgets(): Promise<ProjectBudget[]>;
+  upsertProjectBudget(projectName: string, budgetHours: number): Promise<ProjectBudget>;
+  deleteProjectBudget(id: string): Promise<boolean>;
+  getProjectHourTotals(): Promise<Array<{ projectName: string; totalHours: number }>>;
   listHistory(weekId: string, limit?: number): Promise<TaskHistory[]>;
   listThoughtThreads(limit?: number): Promise<ThoughtThread[]>;
   getThoughtThreadById(threadId: string): Promise<ThoughtThread | null>;

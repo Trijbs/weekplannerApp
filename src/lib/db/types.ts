@@ -88,6 +88,8 @@ export interface HourBlock {
   updatedAt: string;
 }
 
+export type HourEntryStatus = "running" | "registered";
+
 export interface HourEntry {
   id: string;
   weekId: string;
@@ -97,6 +99,19 @@ export interface HourEntry {
   projectName: string;
   noteText: string;
   source: SourceType;
+  startedAt: string | null;
+  stoppedAt: string | null;
+  hourBlockId: string | null;
+  dayTaskId: string | null;
+  status: HourEntryStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectBudget {
+  id: string;
+  projectName: string;
+  budgetHours: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -187,6 +202,7 @@ export interface LocalDatabaseState {
   dayTasks: DayTask[];
   hourBlocks: HourBlock[];
   hourEntries: HourEntry[];
+  projectBudgets: ProjectBudget[];
   taskHistory: TaskHistory[];
   importJobs: ImportJob[];
   thoughtThreads: ThoughtThread[];
@@ -250,10 +266,24 @@ export interface HourEntryInput {
   projectName?: string;
   noteText?: string;
   source?: SourceType;
+  startedAt?: string | null;
+  stoppedAt?: string | null;
+  hourBlockId?: string | null;
+  dayTaskId?: string | null;
+  status?: HourEntryStatus;
 }
 
 export interface HourEntryPatch extends Partial<HourEntryInput> {
   weekId?: string;
+}
+
+export interface TimerStartInput {
+  dayDate: string;
+  weekday: Weekday;
+  projectName?: string;
+  noteText?: string;
+  hourBlockId?: string | null;
+  dayTaskId?: string | null;
 }
 
 export interface ThoughtThreadInput {
