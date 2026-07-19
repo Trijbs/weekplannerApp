@@ -26,6 +26,7 @@ import { NotesExportModal } from "@/components/weekplanner/NotesExportModal";
 import { TimerSection, type TimerStartRequest } from "@/components/tijdregistratie/TimerSection";
 import { RemindersBanner } from "@/components/tijdregistratie/RemindersBanner";
 import { ProjectBudgets } from "@/components/tijdregistratie/ProjectBudgets";
+import { ExportCenter } from "@/components/tijdregistratie/ExportCenter";
 import {
   deriveTimeReminders,
   wallClockNowPseudoIso,
@@ -3677,6 +3678,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
               </div>
 
               <ProjectBudgets refreshToken={`${payload.week.id}-${payload.hourEntries.length}`} t={t} />
+
+              <ExportCenter
+                todayIso={todayIsoAmsterdam}
+                weekStartDate={payload.week.startDate}
+                weekEndDate={payload.week.endDate}
+                projectNames={payload.hourSummary.perProjectTotals.map((item) => item.projectName)}
+                t={t}
+              />
 
               {/* Per project — collapsible accordion cards */}
               <div className="space-y-2">

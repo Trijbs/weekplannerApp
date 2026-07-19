@@ -72,6 +72,11 @@ const staticTranslations: Record<string, string> = {
   beschikbaar: "available",
   "boven budget": "over budget",
   uur: "hours",
+  Exportcentrum: "Export center",
+  "Deze maand": "This month",
+  "Eigen bereik": "Custom range",
+  "Voor stageverslagen, klantverantwoording, administratie en facturatie.":
+    "For internship reports, client accountability, administration, and invoicing.",
   Uurblokken: "Time blocks",
   "Verlopen dagen": "Past days",
   "Afgevinkt log": "Completed log",
