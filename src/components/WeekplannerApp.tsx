@@ -22,6 +22,7 @@ import { AssigneeTagInput } from "@/components/weekplanner/AssigneeTagInput";
 import { ThoughtInbox } from "@/components/weekplanner/ThoughtInbox";
 import { AnimatedDeleteButton } from "@/components/weekplanner/AnimatedDeleteButton";
 import { MultiWeekPlanModal } from "@/components/weekplanner/MultiWeekPlanModal";
+import { Workspace } from "@/components/workspace/Workspace";
 import { NotesExportModal } from "@/components/weekplanner/NotesExportModal";
 import { TimerSection, type TimerStartRequest } from "@/components/tijdregistratie/TimerSection";
 import { RemindersBanner } from "@/components/tijdregistratie/RemindersBanner";
@@ -54,7 +55,7 @@ import {
   mutationFetch,
 } from "@/lib/client/offline-queue";
 
-type Tab = "planner" | "hours" | "blocks" | "past" | "log" | "thoughts";
+type Tab = "planner" | "hours" | "blocks" | "past" | "log" | "thoughts" | "workspace";
 
 type DashboardPayload = WeekAggregate & {
   hourSummary: HoursSummary;
@@ -3153,8 +3154,20 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         >
           {t("Gedachten")}
         </button>
+        <button
+          type="button"
+          className={`shrink-0 rounded-xl px-4 py-2 text-sm whitespace-nowrap ${tab === "workspace" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+          onClick={() => setTab("workspace")}
+        >
+          {t("Workspace")}
+        </button>
       </nav>
 
+      {tab === "workspace" ? (
+        <div className="mt-4">
+          <Workspace />
+        </div>
+      ) : (
       <div className={`mt-4 grid gap-4 ${tab === "thoughts" ? "lg:grid-cols-1" : "lg:grid-cols-[minmax(0,1fr)_320px]"}`}>
         <section
           className={`order-2 lg:order-1 ${
@@ -4934,6 +4947,7 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
         </div>
         ) : null}
       </div>
+      )}
 
       {showMultiWeekBlockModal ? (
         <MultiWeekPlanModal
