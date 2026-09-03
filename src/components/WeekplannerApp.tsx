@@ -23,6 +23,15 @@ import { ThoughtInbox } from "@/components/weekplanner/ThoughtInbox";
 import { AnimatedDeleteButton } from "@/components/weekplanner/AnimatedDeleteButton";
 import { MultiWeekPlanModal } from "@/components/weekplanner/MultiWeekPlanModal";
 import { NotesExportModal } from "@/components/weekplanner/NotesExportModal";
+import { TimerSection, type TimerStartRequest } from "@/components/tijdregistratie/TimerSection";
+import { RemindersBanner } from "@/components/tijdregistratie/RemindersBanner";
+import { ProjectBudgets } from "@/components/tijdregistratie/ProjectBudgets";
+import { ExportCenter } from "@/components/tijdregistratie/ExportCenter";
+import {
+  deriveTimeReminders,
+  wallClockNowPseudoIso,
+  type TimeReminder,
+} from "@/lib/time/tracking";
 import {
   getLocale,
   getMonthLabels,
@@ -933,6 +942,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
   const [hourEntryHoursEditing, setHourEntryHoursEditing] = useState<Record<string, boolean>>({});
   const [hourEntryHoursDrafts, setHourEntryHoursDrafts] = useState<Record<string, string>>({});
 
+  // Tijdregistratie: lopende timer, herinneringen en koppeling voor voorgevulde registratie
+  const [runningEntry, setRunningEntry] = useState<HourEntry | null>(null);
+  const [dismissedReminders, setDismissedReminders] = useState<Set<string>>(() => new Set());
+  const [reminderMinuteTick, setReminderMinuteTick] = useState(0);
+  const [hourFormLink, setHourFormLink] = useState<{ hourBlockId?: string; dayTaskId?: string } | null>(null);
+
   const [blockForm, setBlockForm] = useState(() => {
     const dayDate = todayIsoForTimezone("Europe/Amsterdam");
     return {
@@ -1130,6 +1145,43 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     const timer = window.setInterval(updateNow, 1_000);
     return () => window.clearInterval(timer);
   }, [locale]);
+
+  // Lopende timer laden zodra weekdata ververst (timer overleeft zo een refresh).
+  useEffect(() => {
+    if (!payload) {
+      return;
+    }
+    let cancelled = false;
+    void fetch("/api/hours/timer", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((json: { data?: { running: HourEntry | null } } | null) => {
+        if (!cancelled) {
+          setRunningEntry(json?.data?.running ?? null);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [payload]);
+
+  // Herinneringen herberekenen per minuut (uurblok-eindtijden verstrijken).
+  useEffect(() => {
+    const timer = window.setInterval(() => setReminderMinuteTick((prev) => prev + 1), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Weggeklikte herinneringen bewaren over sessies heen.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("tijdregistratie-dismissed");
+      if (stored) {
+        setDismissedReminders(new Set(JSON.parse(stored) as string[]));
+      }
+    } catch {
+      // Ongeldige opslag negeren.
+    }
+  }, []);
 
   useEffect(() => {
     if (!inlineFeedback || inlineFeedback.status === "saving") {
@@ -2503,6 +2555,94 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
     [activeWeekId, applyLocalMutation, language, loadData, refreshQueueCount, t],
   );
 
+  const refreshRunningTimer = useCallback(async () => {
+    try {
+      const response = await fetch("/api/hours/timer", { cache: "no-store" });
+      if (!response.ok) {
+        return;
+      }
+      const json = (await response.json()) as { data?: { running: HourEntry | null } };
+      setRunningEntry(json.data?.running ?? null);
+    } catch {
+      // Offline: lopende timer-status blijft zoals hij was.
+    }
+  }, []);
+
+  const startTimer = useCallback(
+    async (input: TimerStartRequest) => {
+      const dayDate = todayIsoAmsterdam ?? todayIsoForTimezone("Europe/Amsterdam");
+      const outcome = await sendMutation(
+        "/api/hours/timer",
+        "POST",
+        { dayDate, ...input },
+        t("Timer gestart."),
+        { keepCurrentWeek: true },
+      );
+      if (outcome.ok && !outcome.queued) {
+        await refreshRunningTimer();
+      }
+    },
+    [refreshRunningTimer, sendMutation, t, todayIsoAmsterdam],
+  );
+
+  const stopTimer = useCallback(async () => {
+    const outcome = await sendMutation("/api/hours/timer/stop", "POST", {}, t("Timer gestopt."), {
+      keepCurrentWeek: true,
+    });
+    if (outcome.ok && !outcome.queued) {
+      setRunningEntry(null);
+    }
+  }, [sendMutation, t]);
+
+  const timeReminders = useMemo<TimeReminder[]>(() => {
+    if (!payload || !todayIsoAmsterdam) {
+      return [];
+    }
+    // reminderMinuteTick forceert een herberekening per minuut.
+    void reminderMinuteTick;
+    const all = deriveTimeReminders({
+      tasks: payload.tasks,
+      hourBlocks: payload.hourBlocks,
+      entries: payload.hourEntries,
+      todayIso: todayIsoAmsterdam,
+      nowIso: wallClockNowPseudoIso("Europe/Amsterdam"),
+    });
+    return all.filter((reminder) => !dismissedReminders.has(`${reminder.kind}:${reminder.entityId}`));
+  }, [dismissedReminders, payload, reminderMinuteTick, todayIsoAmsterdam]);
+
+  const dismissReminder = useCallback((reminder: TimeReminder) => {
+    setDismissedReminders((prev) => {
+      const next = new Set(prev);
+      next.add(`${reminder.kind}:${reminder.entityId}`);
+      try {
+        window.localStorage.setItem("tijdregistratie-dismissed", JSON.stringify([...next]));
+      } catch {
+        // Opslag vol of geblokkeerd: alleen sessie-status.
+      }
+      return next;
+    });
+  }, []);
+
+  const registerReminder = useCallback(
+    (reminder: TimeReminder) => {
+      const dayDate = reminder.dayDate ?? todayIsoAmsterdam ?? todayIsoForTimezone("Europe/Amsterdam");
+      setHourForm({
+        dayDate,
+        weekday: weekdayFromIsoDate(dayDate) ?? "maandag",
+        hoursDecimal: reminder.suggestedHours ? String(reminder.suggestedHours) : "1",
+        projectName: reminder.projectName,
+        noteText: reminder.title,
+      });
+      setHourFormLink(
+        reminder.kind === "blok-zonder-uren"
+          ? { hourBlockId: reminder.entityId }
+          : { dayTaskId: reminder.entityId },
+      );
+      setTab("hours");
+    },
+    [todayIsoAmsterdam],
+  );
+
   const createTaskFromThought = useCallback(
     async (title: string, weekday: Weekday, threadId?: string, scheduleTime?: string): Promise<boolean> => {
       if (!payload?.week.id) {
@@ -2978,7 +3118,12 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
           className={`shrink-0 rounded-xl px-4 py-2 text-sm whitespace-nowrap ${tab === "hours" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
           onClick={() => setTab("hours")}
         >
-          {t("Urenregistratie")}
+          {t("Tijdregistratie")}
+          {timeReminders.length > 0 ? (
+            <span className="ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-semibold text-white">
+              {timeReminders.length}
+            </span>
+          ) : null}
         </button>
         <button
           type="button"
@@ -3298,6 +3443,23 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
 
           {tab === "hours" && payload ? (
             <div className="space-y-5">
+              <RemindersBanner
+                reminders={timeReminders}
+                onRegister={registerReminder}
+                onDismiss={dismissReminder}
+                t={t}
+              />
+              <TimerSection
+                todayIso={todayIsoAmsterdam}
+                todayWeekday={todayIsoAmsterdam ? weekdayFromIsoDate(todayIsoAmsterdam) : null}
+                tasks={payload.tasks}
+                hourBlocks={payload.hourBlocks}
+                entries={payload.hourEntries}
+                runningEntry={runningEntry}
+                onStart={(input) => void startTimer(input)}
+                onStop={() => void stopTimer()}
+                t={t}
+              />
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t("Uren toevoegen")}</p>
                 <button
@@ -3439,12 +3601,14 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                       "POST",
                       {
                         ...hourForm,
+                        ...(hourFormLink ?? {}),
                         weekday: hourFormDerivedWeekday,
                         hoursDecimal: Number(hourForm.hoursDecimal),
                       },
                       t("Uren toegevoegd."),
                       { localUpdate: true, keepCurrentWeek: false },
                     );
+                    setHourFormLink(null);
                   }}
                 >
                   {t("Uren toevoegen")}
@@ -3512,6 +3676,16 @@ export function WeekplannerApp({ initialPinStatus = null }: WeekplannerAppProps)
                   </div>
                 </div>
               </div>
+
+              <ProjectBudgets refreshToken={`${payload.week.id}-${payload.hourEntries.length}`} t={t} />
+
+              <ExportCenter
+                todayIso={todayIsoAmsterdam}
+                weekStartDate={payload.week.startDate}
+                weekEndDate={payload.week.endDate}
+                projectNames={payload.hourSummary.perProjectTotals.map((item) => item.projectName)}
+                t={t}
+              />
 
               {/* Per project — collapsible accordion cards */}
               <div className="space-y-2">

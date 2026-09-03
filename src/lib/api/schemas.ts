@@ -66,6 +66,8 @@ export const hourEntryCreateSchema = z.object({
   hoursDecimal: z.coerce.number().positive().max(24),
   projectName: z.string().max(240).optional().default(""),
   noteText: z.string().max(4000).optional().default(""),
+  hourBlockId: z.string().uuid().nullable().optional(),
+  dayTaskId: z.string().uuid().nullable().optional(),
 });
 
 export const hourEntryPatchSchema = z.object({
@@ -74,7 +76,26 @@ export const hourEntryPatchSchema = z.object({
   hoursDecimal: z.coerce.number().positive().max(24).optional(),
   projectName: z.string().max(240).optional(),
   noteText: z.string().max(4000).optional(),
+  hourBlockId: z.string().uuid().nullable().optional(),
+  dayTaskId: z.string().uuid().nullable().optional(),
   expectedUpdatedAt: z.string().min(1).optional(),
+});
+
+export const timerStartSchema = z.object({
+  dayDate: z.string().date(),
+  projectName: z.string().max(240).optional().default(""),
+  noteText: z.string().max(4000).optional().default(""),
+  hourBlockId: z.string().uuid().nullable().optional().default(null),
+  dayTaskId: z.string().uuid().nullable().optional().default(null),
+});
+
+export const timerStopSchema = z.object({
+  entryId: z.string().uuid().optional(),
+});
+
+export const projectBudgetUpsertSchema = z.object({
+  projectName: z.string().min(1).max(240),
+  budgetHours: z.coerce.number().positive().max(10000),
 });
 
 export const weekUpsertSchema = z.object({

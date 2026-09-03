@@ -10,6 +10,7 @@ import {
   nowIso,
 } from "@/lib/db/helpers";
 import { buildHoursSummary } from "@/lib/db/summary";
+import { computeDurationHours } from "@/lib/time/tracking";
 import type { DatabaseRepository, NotesCountBounds } from "@/lib/db/repository.interface";
 import type {
   AppSettings,
@@ -28,6 +29,7 @@ import type {
   ImportJob,
   ImportUpsertResult,
   LocalDatabaseState,
+  ProjectBudget,
   SessionRecord,
   TaskHistory,
   ThoughtMessage,
@@ -36,6 +38,7 @@ import type {
   ThoughtSummaryContent,
   ThoughtThread,
   ThoughtThreadInput,
+  TimerStartInput,
   WeekAggregate,
   WeekRecord,
   Weekday,
@@ -83,12 +86,26 @@ const EMPTY_STATE: LocalDatabaseState = {
   dayTasks: [],
   hourBlocks: [],
   hourEntries: [],
+  projectBudgets: [],
   taskHistory: [],
   importJobs: [],
   thoughtThreads: [],
   thoughtMessages: [],
   thoughtSummaries: [],
 };
+
+// Bestaande urenregels van vóór de tijdregistratie-uitbreiding missen de
+// timer-velden; vul defaults aan zodat oude data intact en bruikbaar blijft.
+function normalizeHourEntry(raw: HourEntry): HourEntry {
+  return {
+    ...raw,
+    startedAt: raw.startedAt ?? null,
+    stoppedAt: raw.stoppedAt ?? null,
+    hourBlockId: raw.hourBlockId ?? null,
+    dayTaskId: raw.dayTaskId ?? null,
+    status: raw.status === "running" ? "running" : "registered",
+  };
+}
 
 const weekdayOrder: Record<Weekday, number> = {
   maandag: 1,
@@ -130,7 +147,8 @@ return {
       weeks: parsed.weeks ?? [],
       dayTasks: parsed.dayTasks ?? [],
       hourBlocks: parsed.hourBlocks ?? [],
-      hourEntries: parsed.hourEntries ?? [],
+      hourEntries: (parsed.hourEntries ?? []).map(normalizeHourEntry),
+      projectBudgets: parsed.projectBudgets ?? [],
       taskHistory: parsed.taskHistory ?? [],
       importJobs: parsed.importJobs ?? [],
       thoughtThreads: parsed.thoughtThreads ?? [],
@@ -738,6 +756,11 @@ export const localDb: DatabaseRepository = {
         projectName: input.projectName?.trim() ?? "",
         noteText: input.noteText?.trim() ?? "",
         source: input.source ?? "manual",
+        startedAt: input.startedAt ?? null,
+        stoppedAt: input.stoppedAt ?? null,
+        hourBlockId: input.hourBlockId ?? null,
+        dayTaskId: input.dayTaskId ?? null,
+        status: input.status ?? "registered",
         createdAt: nowIso(),
         updatedAt: nowIso(),
       };
@@ -776,6 +799,11 @@ export const localDb: DatabaseRepository = {
       if (patch.projectName !== undefined) entry.projectName = patch.projectName.trim();
       if (patch.noteText !== undefined) entry.noteText = patch.noteText.trim();
       if (patch.source) entry.source = patch.source;
+      if (patch.startedAt !== undefined) entry.startedAt = patch.startedAt;
+      if (patch.stoppedAt !== undefined) entry.stoppedAt = patch.stoppedAt;
+      if (patch.hourBlockId !== undefined) entry.hourBlockId = patch.hourBlockId;
+      if (patch.dayTaskId !== undefined) entry.dayTaskId = patch.dayTaskId;
+      if (patch.status) entry.status = patch.status;
       entry.updatedAt = nowIso();
 
       const changes = computeDiff(before as unknown as Record<string, unknown>, entry as unknown as Record<string, unknown>);
@@ -839,6 +867,165 @@ export const localDb: DatabaseRepository = {
 
       const familyIds = equivalentWeekIds(state, week);
       return buildHoursSummary(state.hourEntries.filter((entry) => familyIds.has(entry.weekId)));
+    });
+  },
+
+  async getRunningHourEntry(): Promise<HourEntry | null> {
+    return query((state) => state.hourEntries.find((entry) => entry.status === "running") ?? null);
+  },
+
+  async startHourTimer(weekId: string, input: TimerStartInput, actor: HistoryActor): Promise<HourEntry> {
+    return mutate((state) => {
+      const now = nowIso();
+
+      // Maximaal één lopende timer: registreer een eventuele lopende eerst.
+      const running = state.hourEntries.find((entry) => entry.status === "running");
+      if (running) {
+        running.stoppedAt = now;
+        running.hoursDecimal = running.startedAt ? computeDurationHours(running.startedAt, now) : running.hoursDecimal;
+        running.status = "registered";
+        running.updatedAt = now;
+        pushHistory(state, {
+          weekId: running.weekId,
+          entityType: "hour_entry",
+          entityId: running.id,
+          eventType: "updated",
+          actor,
+          noteText: `Timer gestopt: ${running.hoursDecimal} uur op ${running.dayDate}`,
+          changedFields: {},
+        });
+      }
+
+      const created: HourEntry = {
+        id: createId(),
+        weekId,
+        dayDate: input.dayDate,
+        weekday: input.weekday,
+        hoursDecimal: 0,
+        projectName: input.projectName?.trim() ?? "",
+        noteText: input.noteText?.trim() ?? "",
+        source: "manual",
+        startedAt: now,
+        stoppedAt: null,
+        hourBlockId: input.hourBlockId ?? null,
+        dayTaskId: input.dayTaskId ?? null,
+        status: "running",
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      state.hourEntries.push(created);
+      pushHistory(state, {
+        weekId,
+        entityType: "hour_entry",
+        entityId: created.id,
+        eventType: "created",
+        actor,
+        noteText: `Timer gestart op ${created.dayDate}`,
+        changedFields: computeDiff({}, created as unknown as Record<string, unknown>),
+      });
+
+      return created;
+    });
+  },
+
+  async stopHourTimer(entryId: string, actor: HistoryActor): Promise<HourEntry | null> {
+    return mutate((state) => {
+      const entry = state.hourEntries.find((item) => item.id === entryId);
+      if (!entry || entry.status !== "running") {
+        return null;
+      }
+
+      const now = nowIso();
+      entry.stoppedAt = now;
+      entry.hoursDecimal = entry.startedAt ? computeDurationHours(entry.startedAt, now) : entry.hoursDecimal;
+      entry.status = "registered";
+      entry.updatedAt = now;
+
+      pushHistory(state, {
+        weekId: entry.weekId,
+        entityType: "hour_entry",
+        entityId: entry.id,
+        eventType: "updated",
+        actor,
+        noteText: `Timer gestopt: ${entry.hoursDecimal} uur op ${entry.dayDate}`,
+        changedFields: {},
+      });
+
+      return entry;
+    });
+  },
+
+  async listHourEntriesByRange(startDate: string | null, endDate: string | null): Promise<HourEntry[]> {
+    return query((state) =>
+      sortHours(
+        state.hourEntries.filter((entry) => {
+          if (startDate && entry.dayDate < startDate) {
+            return false;
+          }
+          if (endDate && entry.dayDate > endDate) {
+            return false;
+          }
+          return true;
+        }),
+      ),
+    );
+  },
+
+  async listProjectBudgets(): Promise<ProjectBudget[]> {
+    return query((state) =>
+      state.projectBudgets.slice().sort((a, b) => a.projectName.localeCompare(b.projectName)),
+    );
+  },
+
+  async upsertProjectBudget(projectName: string, budgetHours: number): Promise<ProjectBudget> {
+    return mutate((state) => {
+      const now = nowIso();
+      const name = projectName.trim();
+      const existing = state.projectBudgets.find(
+        (budget) => budget.projectName.toLowerCase() === name.toLowerCase(),
+      );
+
+      if (existing) {
+        existing.budgetHours = budgetHours;
+        existing.updatedAt = now;
+        return existing;
+      }
+
+      const created: ProjectBudget = {
+        id: createId(),
+        projectName: name,
+        budgetHours,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      state.projectBudgets.push(created);
+      return created;
+    });
+  },
+
+  async deleteProjectBudget(id: string): Promise<boolean> {
+    return mutate((state) => {
+      const index = state.projectBudgets.findIndex((budget) => budget.id === id);
+      if (index < 0) {
+        return false;
+      }
+      state.projectBudgets.splice(index, 1);
+      return true;
+    });
+  },
+
+  async getProjectHourTotals(): Promise<Array<{ projectName: string; totalHours: number }>> {
+    return query((state) => {
+      const totals = new Map<string, number>();
+      for (const entry of state.hourEntries) {
+        const projectName = entry.projectName.trim() || "Onbekend";
+        totals.set(projectName, Number(((totals.get(projectName) ?? 0) + entry.hoursDecimal).toFixed(2)));
+      }
+      return [...totals.entries()]
+        .map(([projectName, totalHours]) => ({ projectName, totalHours }))
+        .sort((a, b) => b.totalHours - a.totalHours || a.projectName.localeCompare(b.projectName));
     });
   },
 
