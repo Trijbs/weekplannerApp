@@ -40,7 +40,7 @@ export function WidgetContainer({
     >
       {/* Header — drag handle */}
       <div
-        className={`flex items-center justify-between px-4 py-2.5 ${
+        className={`widget-drag-handle flex items-center justify-between px-4 py-2.5 ${
           isEditMode ? "cursor-grab active:cursor-grabbing" : ""
         }`}
       >
